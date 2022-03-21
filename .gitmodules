@@ -1,0 +1,3 @@
+[submodule "SupContrast"]
+	path = SupContrast
+	url = https://github.com/htn274/SupContrast
