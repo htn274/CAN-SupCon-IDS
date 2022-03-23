@@ -3,10 +3,12 @@ import argparse
 import math
 import numpy as np
 from tqdm import tqdm
+from datetime import datetime
 
 from dataset import CANDataset
 from utils import get_prediction, cal_metric, print_results
 from networks.inception import InceptionResnet
+from networks.simple_cnn import BaselineCNNClassifier
 
 from SupContrast.util import set_optimizer, save_model
 from SupContrast.util import AverageMeter
@@ -22,10 +24,15 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 from sklearn.metrics import f1_score
 
 NUM_CLASSES = 5
+MODELS = {
+   'inception': InceptionResnet,
+    'cnn': BaselineCNNClassifier 
+}
 
 def parse_option():
     parser = argparse.ArgumentParser('argument for training')
     parser.add_argument('--data_dir', type=str, help='directory of data for training')
+    parser.add_argument('--model', type=str, help='choosing models in [inception, cnn]')
     parser.add_argument('--print_freq', type=int, default=10)
     parser.add_argument('--save_freq', type=int, default=1)
     parser.add_argument('--window_size', type=int)
@@ -63,7 +70,8 @@ def parse_option():
             
     opt.model_path = './save/models/'
     opt.tb_path = './save/runs/'
-    opt.model_name = 'CrossEntropy_lr{}_bs{}'.format(opt.learning_rate, opt.batch_size)
+    current_time = datetime.now().strftime("%D_%H%M%S")
+    opt.model_name = '{}_lr{}_bs{}_{}'.format(opt.model, opt.learning_rate, opt.batch_size, current_time)
     if opt.cosine:
         opt.model_name = '{}_cosine'.format(opt.model_name)
     if opt.warm:
@@ -96,18 +104,20 @@ def set_loader(opt):
         pin_memory=True, sampler=None)
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=opt.batch_size, shuffle=False,
-        num_workers=8, pin_memory=True)
+        num_workers=0, pin_memory=True)
     
     return train_loader, val_loader
 
 def set_model(opt):
-    model = InceptionResnet(n_classes=NUM_CLASSES)
+    model = MODELS[opt.model]
+    model = model(feat_dim=128, n_classes=NUM_CLASSES)
+    # model = InceptionResnet(n_classes=NUM_CLASSES) 
+    # model = BaselineCNN(n_classes=NUM_CLASSES)
     criterion = torch.nn.CrossEntropyLoss()
     if torch.cuda.is_available():
         #if torch.cuda.device_count() > 1:
         #    # for using multiple gpus
         #    model = torch.nn.DataParallel(model)
-            
         model = model.cuda()
         criterion = criterion.cuda()
         # Incerease runtime performance
