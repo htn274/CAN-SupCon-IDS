@@ -186,7 +186,6 @@ def train_classifier(train_loader, model, classifier, criterion, optimizer, epoc
         
         with torch.no_grad():
             features = model.encoder(images)
-            features = torch.flatten(features, 1)
             
         output = classifier(features.detach())
         loss = criterion(output, labels)
@@ -279,6 +278,7 @@ def main():
         if epoch % train_classifier_freq == 0:
             adjust_learning_rate(opt, optimizer_classifier, epoch // train_classifier_freq, '_classifier')
             new_step, loss_ce, train_acc = train_classifier(train_loader, model, classifier, criterion_classifier, optimizer_classifier, epoch, opt, step)
+            print('Classifier: Loss: {}, Acc: {}'.format(loss_ce, train_acc))
             loss, val_f1 = validate(val_loader, model, classifier, criterion_classifier, opt)
             logger.add_scalar('loss_ce/val', loss, step)
             print('Validation: Loss: {}, F1: {}'.format(loss, val_f1))
