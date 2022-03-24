@@ -38,7 +38,8 @@ def parse_option():
     parser.add_argument('--window_size', type=int)
     parser.add_argument('--batch_size', type=int)
     parser.add_argument('--epochs', type=int)
-    parser.add_argument('--num_workers', type=int)
+    parser.add_argument('--num_workers', type=int, default=0)
+    parser.add_argument('--gpu_device', type=int, default=0)
     
     # optimization
     parser.add_argument('--learning_rate', type=float, default=0.2,
@@ -55,6 +56,11 @@ def parse_option():
                         help='using cosine annealing')
     
     opt = parser.parse_args()
+    
+    
+    if torch.cuda.is_available():
+        torch.cuda.set_device(opt.gpu_device)
+        
     if opt.batch_size > 256:
         opt.warm = True
     if opt.warm:
@@ -70,7 +76,7 @@ def parse_option():
             
     opt.model_path = './save/models/'
     opt.tb_path = './save/runs/'
-    current_time = datetime.now().strftime("%D_%H%M%S")
+    current_time = datetime.now().strftime("%D_%H%M%S").replace('/', '')
     opt.model_name = '{}_lr{}_bs{}_{}'.format(opt.model, opt.learning_rate, opt.batch_size, current_time)
     if opt.cosine:
         opt.model_name = '{}_cosine'.format(opt.model_name)

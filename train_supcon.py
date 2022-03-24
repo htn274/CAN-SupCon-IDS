@@ -35,7 +35,8 @@ def parse_option():
     parser.add_argument('--window_size', type=int)
     parser.add_argument('--batch_size', type=int)
     parser.add_argument('--epochs', type=int)
-    parser.add_argument('--num_workers', type=int)
+    parser.add_argument('--num_workers', type=int, default=0)
+    parser.add_argument('--gpu_device', type=int, default=0)
     
     # temperature
     parser.add_argument('--temp', type=float, default=0.07,
@@ -66,6 +67,10 @@ def parse_option():
     parser.add_argument('--cosine', action='store_true',
                         help='using cosine') 
     opt = parser.parse_args()
+    
+    if torch.cuda.is_available():
+        torch.cuda.set_device(opt.gpu_device)
+        
     if opt.batch_size > 256:
         opt.warm = True
     if opt.warm:
@@ -81,7 +86,7 @@ def parse_option():
             
     opt.model_path = './save/models/'
     opt.tb_path = './save/runs/'
-    current_time = datetime.now().strftime("%D_%H%M%S")
+    current_time = datetime.now().strftime("%D_%H%M%S").replace('/', '')
     opt.model_name = 'SupCon_{}_lr{}_bs{}_{}'.format(opt.model, opt.learning_rate, opt.batch_size, current_time)
     if opt.cosine:
         opt.model_name = '{}_cosine'.format(opt.model_name)
@@ -105,8 +110,8 @@ def set_loader(opt):
     val_dataset = CANDataset(root_dir=opt.data_dir, 
                              window_size=opt.window_size,
                              is_train=False)
-    train_dataset.total_size = 100000
-    val_dataset.total_size = 10000
+    #train_dataset.total_size = 100000
+    #val_dataset.total_size = 10000
     print('Train size: ', len(train_dataset))
     print('Val size: ', len(val_dataset))
     train_loader = torch.utils.data.DataLoader(
@@ -273,15 +278,15 @@ def main():
         adjust_learning_rate(opt, optimizer_model, epoch)
         
         new_step, loss = train_model(train_loader, model, criterion_model, optimizer_model, epoch, opt, logger, step)
-        print('Epoch: {}, SupCon Loss: {}'.format(epoch, loss))
+        print('Epoch: {:.4f}, SupCon Loss: {:.4f}'.format(epoch, loss))
         # Train and validate classifier 
         if epoch % train_classifier_freq == 0:
             adjust_learning_rate(opt, optimizer_classifier, epoch // train_classifier_freq, '_classifier')
             new_step, loss_ce, train_acc = train_classifier(train_loader, model, classifier, criterion_classifier, optimizer_classifier, epoch, opt, step)
-            print('Classifier: Loss: {}, Acc: {}'.format(loss_ce, train_acc))
+            print('Classifier: Loss: {:.4f}, Acc: {:.4f}'.format(loss_ce, train_acc))
             loss, val_f1 = validate(val_loader, model, classifier, criterion_classifier, opt)
             logger.add_scalar('loss_ce/val', loss, step)
-            print('Validation: Loss: {}, F1: {}'.format(loss, val_f1))
+            print('Validation: Loss: {:.4f}, F1: {:.4f}'.format(loss, val_f1))
 
             
         step = new_step
