@@ -7,7 +7,7 @@ from datetime import datetime
 
 from dataset import CANDataset
 from utils import get_prediction, cal_metric, print_results
-from networks.simple_cnn import CNNEncoder, LinearClassifier
+from networks.simple_cnn import SupConCNN, LinearClassifier
 
 from SupContrast.util import set_optimizer, save_model
 from SupContrast.util import AverageMeter
@@ -18,8 +18,8 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
-import torch.multiprocessing
-torch.multiprocessing.set_sharing_strategy('file_system')
+#import torch.multiprocessing
+#torch.multiprocessing.set_sharing_strategy('file_system')
 
 from sklearn.metrics import f1_score
 
@@ -84,8 +84,8 @@ def parse_option():
             opt.warmup_to = opt.learning_rate
             
             
-    opt.model_path = './save/models/'
-    opt.tb_path = './save/runs/'
+    opt.model_path = './save/{}/models/'
+    opt.tb_path = './save/{}/runs/'
     current_time = datetime.now().strftime("%D_%H%M%S").replace('/', '')
     opt.model_name = 'SupCon_{}_lr{}_bs{}_{}'.format(opt.model, opt.learning_rate, opt.batch_size, current_time)
     if opt.cosine:
@@ -93,11 +93,11 @@ def parse_option():
     if opt.warm:
         opt.model_name = '{}_warm'.format(opt.model_name)
         
-    opt.tb_folder = os.path.join(opt.tb_path, opt.model_name)
+    opt.tb_folder = opt.model_path.format(opt.model_name)    
     if not os.path.isdir(opt.tb_folder):
         os.makedirs(opt.tb_folder, exist_ok=True)
         
-    opt.save_folder = os.path.join(opt.model_path, opt.model_name)
+    opt.save_folder = opt.tb_path.format(opt.model_name)    
     if not os.path.isdir(opt.save_folder):
         os.makedirs(opt.save_folder, exist_ok=True)
         
@@ -120,15 +120,14 @@ def set_loader(opt):
         pin_memory=True, sampler=None)
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=opt.batch_size, shuffle=False,
-        num_workers=0, pin_memory=True)
+        num_workers=8, pin_memory=True)
     
     return train_loader, val_loader
 
 def set_model(opt):
-    model = CNNEncoder(feat_dim=128)
+    model = SupConCNN(feat_dim=128)
     criterion_model = SupConLoss(temperature=opt.temp)
-    
-    classifier = LinearClassifier(feat_dim=64*3*3, n_classes=NUM_CLASSES)
+    classifier = LinearClassifier(n_classes=NUM_CLASSES)
     criterion_classifier = torch.nn.CrossEntropyLoss()
     
     if torch.cuda.is_available():
@@ -173,7 +172,7 @@ def train_model(train_loader, model, criterion, optimizer, epoch, opt, logger, s
     return step, losses.avg
 
 
-def train_classifier(train_loader, model, classifier, criterion, optimizer, epoch, opt, step):
+def train_classifier(train_loader, model, classifier, criterion, optimizer, epoch, opt, step, logger):
     model.eval()
     classifier.train()
     
@@ -271,19 +270,19 @@ def main():
     optimizer_classifier = set_optimizer(opt, classifier, '_classifier')
     
     logger = SummaryWriter(log_dir=opt.tb_folder, flush_secs=2)
-    train_classifier_freq = 1
+    train_classifier_freq = 2
     step = 0
     
     for epoch in range(1, opt.epochs + 1):
         adjust_learning_rate(opt, optimizer_model, epoch)
         
         new_step, loss = train_model(train_loader, model, criterion_model, optimizer_model, epoch, opt, logger, step)
-        print('Epoch: {:.4f}, SupCon Loss: {:.4f}'.format(epoch, loss))
+        print('Epoch: {}, SupCon Loss: {:.4f}'.format(epoch, loss))
         # Train and validate classifier 
         if epoch % train_classifier_freq == 0:
             adjust_learning_rate(opt, optimizer_classifier, epoch // train_classifier_freq, '_classifier')
-            new_step, loss_ce, train_acc = train_classifier(train_loader, model, classifier, criterion_classifier, optimizer_classifier, epoch, opt, step)
-            print('Classifier: Loss: {:.4f}, Acc: {:.4f}'.format(loss_ce, train_acc))
+            new_step, loss_ce, train_acc = train_classifier(train_loader, model, classifier, criterion_classifier, optimizer_classifier, epoch, opt, step, logger)
+            print('Classifier: Loss: {:.4f}, Acc: {}'.format(loss_ce, train_acc))
             loss, val_f1 = validate(val_loader, model, classifier, criterion_classifier, opt)
             logger.add_scalar('loss_ce/val', loss, step)
             print('Validation: Loss: {:.4f}, F1: {:.4f}'.format(loss, val_f1))
@@ -293,10 +292,12 @@ def main():
         if epoch % opt.save_freq == 0:
             ckpt = 'ckpt_epoch_{}.pth'.format(epoch)
             save_file = os.path.join(opt.save_folder, ckpt)
-            save_model(model, optimizer, opt, epoch, save_file)
+            save_model(model, optimizer_model, opt, epoch, save_file)
             
     save_file = os.path.join(opt.save_folder, 'last.pth')
-    save_model(model, optimizer, opt, opt.epochs, save_file)
+    save_model(model, optimizer_model, opt, opt.epochs, save_file)
+    save_file = os.path.join(opt.save_folder, 'last_classifier.pth')
+    save_model(classifier, optimizer_classifier, opt, opt.epochs, save_file)
         
 
 if __name__ == '__main__':

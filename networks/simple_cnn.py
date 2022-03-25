@@ -3,9 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class CNNEncoder(nn.Module):
-    def __init__(self, feat_dim):
+    output_shape = 64*3*3
+    def __init__(self):
         super().__init__()
-        self.feat_dim = feat_dim
         self.convnet = nn.Sequential(
                 nn.Conv2d(1, 16, 3, padding='same'), nn.ReLU(),
                 nn.Conv2d(16, 16, 3, padding='same'),nn.ReLU(),
@@ -19,16 +19,22 @@ class CNNEncoder(nn.Module):
                 nn.Conv2d(64, 64, 3, padding='same'),nn.ReLU(),
                 nn.BatchNorm2d(64),
                 nn.MaxPool2d(2, stride=2))
-        
-        self.head = nn.Sequential(
-                    nn.Linear(64*3*3, 256), nn.ReLU(),
-                    nn.Linear(256, feat_dim))
-        
-    def encoder(self, x):
+       
+    def forward(self, x):
         feat = self.convnet(x)
         feat = torch.flatten(feat, 1)
         return feat
-        
+    
+class SupConCNN(nn.Module):
+    def __init__(self, feat_dim):
+        super().__init__()
+        self.encoder = CNNEncoder()
+        self.feat_dim = feat_dim
+        dim_in = self.encoder.output_shape
+        self.head = nn.Sequential(
+                    nn.Linear(dim_in, 256), nn.ReLU(),
+                    nn.Linear(256, feat_dim))
+       
     def forward(self, x):
         feat = self.encoder(x)
         feat = self.head(feat)
@@ -36,8 +42,9 @@ class CNNEncoder(nn.Module):
         return feat
     
 class LinearClassifier(nn.Module):
-    def __init__(self, feat_dim, n_classes):
+    def __init__(self, n_classes):
         super().__init__()
+        feat_dim = CNNEncoder.output_shape
         self.n_classes = n_classes
         self.fc = nn.Linear(feat_dim, n_classes)
         
@@ -46,11 +53,11 @@ class LinearClassifier(nn.Module):
         return output
     
 class BaselineCNNClassifier(nn.Module):
-    def __init__(self, feat_dim, n_classes):
+    def __init__(self, n_classes):
         super().__init__()
-        self.feat_dim = feat_dim
+        self.encoder = CNNEncoder()
+        feat_dim = CNNEncoder.output_shape
         self.n_classes = n_classes
-        self.encoder = CNNEncoder(feat_dim)
         self.fc = nn.Linear(feat_dim, n_classes)
         
     def forward(self, x):
@@ -58,32 +65,3 @@ class BaselineCNNClassifier(nn.Module):
         out = self.fc(feat)
         return out
         
-class BaselineCNN(nn.Module):
-    def __init__(self, n_classes):
-        super().__init__()
-        self.n_classes = n_classes
-        self.convnet = nn.Sequential(
-                    nn.Conv2d(1, 16, 3, padding='same'), nn.ReLU(),
-                    nn.Conv2d(16, 16, 3, padding='same'),nn.ReLU(),
-                    nn.BatchNorm2d(16),
-                    nn.MaxPool2d(2, stride=2),
-                    nn.Conv2d(16, 32, 3, padding='same'),nn.ReLU(),
-                    nn.Conv2d(32, 32, 3, padding='same'),nn.ReLU(),
-                    nn.BatchNorm2d(32),
-                    nn.MaxPool2d(2, stride=2),
-                    nn.Dropout2d(1 - 0.8)
-                )
-        self.fc = nn.Sequential(
-                    nn.Linear(32*7*7, 512), nn.ReLU(),
-                    nn.Dropout2d(1 - 0.8),
-                    nn.Linear(512, 256), nn.ReLU(),
-                    nn.Dropout2d(1 - 0.8),
-                    nn.Linear(256, self.n_classes),
-                )
-        
-    def forward(self, x):
-        output = x
-        output = self.convnet(output)
-        output = output.view(output.size()[0], -1) 
-        output = self.fc(output)
-        return output

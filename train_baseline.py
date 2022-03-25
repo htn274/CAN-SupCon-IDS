@@ -18,8 +18,6 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
-import torch.multiprocessing
-torch.multiprocessing.set_sharing_strategy('file_system')
 
 from sklearn.metrics import f1_score
 
@@ -74,8 +72,8 @@ def parse_option():
             opt.warmup_to = opt.learning_rate
             
             
-    opt.model_path = './save/models/'
-    opt.tb_path = './save/runs/'
+    opt.model_path = './save/{}/models/'
+    opt.tb_path = './save/{}/runs/'
     current_time = datetime.now().strftime("%D_%H%M%S").replace('/', '')
     opt.model_name = '{}_lr{}_bs{}_{}'.format(opt.model, opt.learning_rate, opt.batch_size, current_time)
     if opt.cosine:
@@ -83,11 +81,11 @@ def parse_option():
     if opt.warm:
         opt.model_name = '{}_warm'.format(opt.model_name)
         
-    opt.tb_folder = os.path.join(opt.tb_path, opt.model_name)
+    opt.tb_folder = opt.model_path.format(opt.model_name)
     if not os.path.isdir(opt.tb_folder):
         os.makedirs(opt.tb_folder, exist_ok=True)
         
-    opt.save_folder = os.path.join(opt.model_path, opt.model_name)
+    opt.save_folder = opt.tb_path.format(opt.model_name)
     if not os.path.isdir(opt.save_folder):
         os.makedirs(opt.save_folder, exist_ok=True)
         
@@ -110,20 +108,15 @@ def set_loader(opt):
         pin_memory=True, sampler=None)
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=opt.batch_size, shuffle=False,
-        num_workers=0, pin_memory=True)
+        num_workers=8, pin_memory=True, sampler=None)
     
     return train_loader, val_loader
 
 def set_model(opt):
     model = MODELS[opt.model]
-    model = model(feat_dim=128, n_classes=NUM_CLASSES)
-    # model = InceptionResnet(n_classes=NUM_CLASSES) 
-    # model = BaselineCNN(n_classes=NUM_CLASSES)
+    model = model(n_classes=NUM_CLASSES)
     criterion = torch.nn.CrossEntropyLoss()
     if torch.cuda.is_available():
-        #if torch.cuda.device_count() > 1:
-        #    # for using multiple gpus
-        #    model = torch.nn.DataParallel(model)
         model = model.cuda()
         criterion = criterion.cuda()
         # Incerease runtime performance
