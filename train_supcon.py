@@ -93,11 +93,11 @@ def parse_option():
     if opt.warm:
         opt.model_name = '{}_warm'.format(opt.model_name)
         
-    opt.tb_folder = opt.model_path.format(opt.model_name)    
+    opt.tb_folder = opt.tb_path.format(opt.model_name)    
     if not os.path.isdir(opt.tb_folder):
         os.makedirs(opt.tb_folder, exist_ok=True)
         
-    opt.save_folder = opt.tb_path.format(opt.model_name)    
+    opt.save_folder = opt.model_path.format(opt.model_name)    
     if not os.path.isdir(opt.save_folder):
         os.makedirs(opt.save_folder, exist_ok=True)
         
@@ -293,6 +293,9 @@ def main():
             ckpt = 'ckpt_epoch_{}.pth'.format(epoch)
             save_file = os.path.join(opt.save_folder, ckpt)
             save_model(model, optimizer_model, opt, epoch, save_file)
+            ckpt = 'ckpt_class_epoch_{}.pth'.format(epoch)
+            save_file = os.path.join(opt.save_folder, ckpt)
+            save_model(classifier, optimizer_classifier, opt, epoch, save_file)
             
     save_file = os.path.join(opt.save_folder, 'last.pth')
     save_model(model, optimizer_model, opt, opt.epochs, save_file)
