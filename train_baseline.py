@@ -75,7 +75,7 @@ def parse_option():
     opt.model_path = './save/{}/models/'
     opt.tb_path = './save/{}/runs/'
     current_time = datetime.now().strftime("%D_%H%M%S").replace('/', '')
-    opt.model_name = '{}_lr{}_bs{}_{}'.format(opt.model, opt.learning_rate, opt.batch_size, current_time)
+    opt.model_name = f'{opt.model}_lr{opt.learning_rate}_bs{opt.batch_size}_{opt.epochs}epochs_{current_time}'
     if opt.cosine:
         opt.model_name = '{}_cosine'.format(opt.model_name)
     if opt.warm:
@@ -108,7 +108,7 @@ def set_loader(opt):
         pin_memory=True, sampler=None)
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=opt.batch_size, shuffle=False,
-        num_workers=8, pin_memory=True, sampler=None)
+        num_workers=2, pin_memory=True, sampler=None)
     
     return train_loader, val_loader
 
@@ -181,6 +181,7 @@ def validate(val_loader, model, criterion, opt):
     f1 = f1_score(total_pred, total_label, average='weighted')
     return losses.avg, f1
 
+# python3 train_baseline.py --data_dir ../Data/TFRecord_w29_s15/1 --batch_size 1024 --window_size 29 --cosine --print_freq 100 --save_freq 5 --gpu_device 0 --model cnn --num_workers 8 --learning_rate 0.01 --epochs 100
 def main():
     opt = parse_option()
     

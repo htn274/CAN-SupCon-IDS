@@ -18,8 +18,6 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
-#import torch.multiprocessing
-#torch.multiprocessing.set_sharing_strategy('file_system')
 
 from sklearn.metrics import f1_score
 
@@ -54,6 +52,7 @@ def parse_option():
     parser.add_argument('--momentum', type=float, default=0.9,
                         help='momentum')
     # optimization
+    parser.add_argument('--epoch_start_classifier', type=int, default=50)
     parser.add_argument('--learning_rate_classifier', type=float, default=0.1,
                         help='learning rate classifier')
     parser.add_argument('--lr_decay_epochs_classifier', type=str, default='60,75,90',
@@ -68,8 +67,8 @@ def parse_option():
                         help='using cosine') 
     opt = parser.parse_args()
     
-    if torch.cuda.is_available():
-        torch.cuda.set_device(opt.gpu_device)
+    #if torch.cuda.is_available():
+    #    torch.cuda.set_device(opt.gpu_device)
         
     if opt.batch_size > 256:
         opt.warm = True
@@ -87,7 +86,7 @@ def parse_option():
     opt.model_path = './save/{}/models/'
     opt.tb_path = './save/{}/runs/'
     current_time = datetime.now().strftime("%D_%H%M%S").replace('/', '')
-    opt.model_name = 'SupCon_{}_lr{}_bs{}_{}'.format(opt.model, opt.learning_rate, opt.batch_size, current_time)
+    opt.model_name = f'SupCon_{opt.model}_lr{opt.learning_rate}_{opt.learning_rate_classifier}_bs{opt.batch_size}_{opt.epochs}epoch_temp{opt.temp}_{current_time}'
     if opt.cosine:
         opt.model_name = '{}_cosine'.format(opt.model_name)
     if opt.warm:
@@ -101,6 +100,9 @@ def parse_option():
     if not os.path.isdir(opt.save_folder):
         os.makedirs(opt.save_folder, exist_ok=True)
         
+        
+    opt.log_file = f'./save/{opt.model_name}/log'
+        
     return opt
 
 
@@ -110,30 +112,36 @@ def set_loader(opt):
     val_dataset = CANDataset(root_dir=opt.data_dir, 
                              window_size=opt.window_size,
                              is_train=False)
-    #train_dataset.total_size = 100000
-    #val_dataset.total_size = 10000
+    train_dataset.total_size = 100000
+    val_dataset.total_size = 10000
     print('Train size: ', len(train_dataset))
     print('Val size: ', len(val_dataset))
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=opt.batch_size, 
         shuffle=True, num_workers=opt.num_workers,
         pin_memory=True, sampler=None)
-    val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=opt.batch_size, shuffle=False,
-        num_workers=8, pin_memory=True)
     
-    return train_loader, val_loader
+    train_classifier_loader = torch.utils.data.DataLoader(
+        train_dataset, batch_size=1024, 
+        shuffle=True, num_workers=opt.num_workers,
+        pin_memory=True, sampler=None)
+    
+    val_loader = torch.utils.data.DataLoader(
+        val_dataset, batch_size=1024, shuffle=False,
+        num_workers=2, pin_memory=True)
+    
+    return train_loader, train_classifier_loader, val_loader
 
 def set_model(opt):
     model = SupConCNN(feat_dim=128)
     criterion_model = SupConLoss(temperature=opt.temp)
     classifier = LinearClassifier(n_classes=NUM_CLASSES)
-    criterion_classifier = torch.nn.CrossEntropyLoss()
+    class_weights = [0.25, 1.0, 1.0, 1.0, 1.0]
+    criterion_classifier = torch.nn.CrossEntropyLoss(weight=torch.FloatTensor(class_weights).cuda())
     
     if torch.cuda.is_available():
-        #if torch.cuda.device_count() > 1:
-        #    # for using multiple gpus
-        #    model.encoder = torch.nn.DataParallel(model.encoder)
+        if torch.cuda.device_count() > 1:
+            model.encoder = torch.nn.DataParallel(model.encoder)
         model = model.cuda()
         criterion_model = criterion_model.cuda()
         classifier = classifier.cuda()
@@ -236,9 +244,15 @@ def validate(val_loader, model, classifier, criterion, opt):
     f1 = f1_score(total_pred, total_label, average='weighted')
     return losses.avg, f1
 
-def set_optimizer(opt, model, class_str=''):
+optimize_dict = {
+    'SGD' : optim.SGD,
+    'RMSprop': optim.RMSprop,
+    'Adam': optim.Adam
+}
+def set_optimizer(opt, model, class_str='', optim_choice='SGD'):
     dict_opt = vars(opt)
-    optimizer = optim.SGD(model.parameters(),
+    optimizer = optimize_dict[optim_choice]
+    optimizer = optimizer(model.parameters(),
                     lr=dict_opt['learning_rate'+class_str],
                     momentum=dict_opt['momentum'+class_str],
                     weight_decay=dict_opt['weight_decay'+class_str])
@@ -259,11 +273,12 @@ def adjust_learning_rate(args, optimizer, epoch, class_str=''):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
+# python3 train_supcon.py --data_dir ../Data/TFRecord_w29_s15/1/ --batch_size 4096 --window_size 29 --cosine --print_freq 100 --mode cnn --gpu_device 0 --learning_rate 0.1 --learning_rate_classifier 0.5 --num_workers 4 --epochs 200 --save_freq 5
 
 def main():
     opt = parse_option()
     
-    train_loader, val_loader = set_loader(opt)
+    train_loader, train_classifier_loader, val_loader = set_loader(opt)
     model, criterion_model, classifier, criterion_classifier = set_model(opt)
    
     optimizer_model = set_optimizer(opt, model)
@@ -273,21 +288,25 @@ def main():
     train_classifier_freq = 2
     step = 0
     
+    log_writer = open(opt.log_file, 'w')
     for epoch in range(1, opt.epochs + 1):
         adjust_learning_rate(opt, optimizer_model, epoch)
         
         new_step, loss = train_model(train_loader, model, criterion_model, optimizer_model, epoch, opt, logger, step)
         print('Epoch: {}, SupCon Loss: {:.4f}'.format(epoch, loss))
+        log_writer.write('Epoch: {}, SupCon Loss: {:.4f}\n'.format(epoch, loss))
         # Train and validate classifier 
-        if epoch % train_classifier_freq == 0:
-            adjust_learning_rate(opt, optimizer_classifier, epoch // train_classifier_freq, '_classifier')
-            new_step, loss_ce, train_acc = train_classifier(train_loader, model, classifier, criterion_classifier, optimizer_classifier, epoch, opt, step, logger)
+        class_epoch = epoch - opt.epoch_start_classifier + 1
+        if class_epoch > 0:
+            adjust_learning_rate(opt, optimizer_classifier, class_epoch, '_classifier')
+            new_step, loss_ce, train_acc = train_classifier(train_classifier_loader, model, classifier, criterion_classifier, optimizer_classifier, epoch, opt, step, logger)
             print('Classifier: Loss: {:.4f}, Acc: {}'.format(loss_ce, train_acc))
+            log_writer.write('Classifier: Loss: {:.4f}, Acc: {}\n'.format(loss_ce, train_acc))
             loss, val_f1 = validate(val_loader, model, classifier, criterion_classifier, opt)
             logger.add_scalar('loss_ce/val', loss, step)
-            print('Validation: Loss: {:.4f}, F1: {:.4f}'.format(loss, val_f1))
+            print('Validation: Loss: {:.6f}, F1: {:.8f}'.format(loss, val_f1))
+            log_writer.write('Validation: Loss: {:.6f}, F1: {:.8f}\n'.format(loss, val_f1))
 
-            
         step = new_step
         if epoch % opt.save_freq == 0:
             ckpt = 'ckpt_epoch_{}.pth'.format(epoch)
