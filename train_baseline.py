@@ -108,13 +108,15 @@ def set_loader(opt):
         pin_memory=True, sampler=None)
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=opt.batch_size, shuffle=False,
-        num_workers=2, pin_memory=True, sampler=None)
+        num_workers=8, pin_memory=True, sampler=None)
     
     return train_loader, val_loader
 
 def set_model(opt):
     model = MODELS[opt.model]
     model = model(n_classes=NUM_CLASSES)
+    #class_weights = [0.25, 1.0, 1.0, 1.0, 1.0]
+    #criterion = torch.nn.CrossEntropyLoss(weight=torch.FloatTensor(class_weights).cuda())
     criterion = torch.nn.CrossEntropyLoss()
     if torch.cuda.is_available():
         model = model.cuda()

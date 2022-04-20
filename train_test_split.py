@@ -60,6 +60,8 @@ def write_tfrecord(dataset, tfwriter):
 if __name__ == '__main__':
     # Parse argument
     parser = argparse.ArgumentParser()
+    parser.add_argument('--data_path', type=str, default='../Data/')
+    parser.add_argument('--car_model', type=str, default=None)
     parser.add_argument('--window_size', type=int)
     parser.add_argument('--strided', type=int) 
     parser.add_argument('--rid', type=int, default=1) 
@@ -72,7 +74,10 @@ if __name__ == '__main__':
         args.strided = args.window_size
         
     # data_dir = '../Data/TFRecord_ID_DATA_HIST_w{}_s{}'.format(args.window_size, args.strided)
-    data_dir = '../Data/TFRecord_w{}_s{}'.format(args.window_size, args.strided)
+    if args.car_model is None:
+        data_dir = f'{args.data_path}/TFrecord_w{args.window_size}_s{args.strided}'
+    else:
+        data_dir = f'{args.data_path}/TFrecord_{args.car_model}_w{args.window_size}_s{args.strided}'
     out_dir = data_dir + '/{}'.format(args.rid)
     train_dir = os.path.join(out_dir, 'train')
     val_dir = os.path.join(out_dir, 'val')

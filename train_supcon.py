@@ -8,6 +8,7 @@ from datetime import datetime
 from dataset import CANDataset
 from utils import get_prediction, cal_metric, print_results
 from networks.simple_cnn import SupConCNN, LinearClassifier
+from SupContrast.networks.resnet_big import SupConResNet
 
 from SupContrast.util import set_optimizer, save_model
 from SupContrast.util import AverageMeter
@@ -37,7 +38,7 @@ def parse_option():
     parser.add_argument('--gpu_device', type=int, default=0)
     
     # temperature
-    parser.add_argument('--temp', type=float, default=0.07,
+    parser.add_argument('--temp', type=float, default=0.1,
                         help='temperature for loss function')
     
     # optimization supcon
@@ -70,6 +71,7 @@ def parse_option():
     #if torch.cuda.is_available():
     #    torch.cuda.set_device(opt.gpu_device)
         
+    opt.warm = False
     if opt.batch_size > 256:
         opt.warm = True
     if opt.warm:
@@ -112,17 +114,17 @@ def set_loader(opt):
     val_dataset = CANDataset(root_dir=opt.data_dir, 
                              window_size=opt.window_size,
                              is_train=False)
-    train_dataset.total_size = 100000
-    val_dataset.total_size = 10000
-    print('Train size: ', len(train_dataset))
-    print('Val size: ', len(val_dataset))
+    #train_dataset.total_size = 100000
+    #val_dataset.total_size = 10000
+    #print('Train size: ', len(train_dataset))
+    #print('Val size: ', len(val_dataset))
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=opt.batch_size, 
         shuffle=True, num_workers=opt.num_workers,
         pin_memory=True, sampler=None)
     
     train_classifier_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=1024, 
+        train_dataset, batch_size=256, 
         shuffle=True, num_workers=opt.num_workers,
         pin_memory=True, sampler=None)
     
@@ -134,10 +136,11 @@ def set_loader(opt):
 
 def set_model(opt):
     model = SupConCNN(feat_dim=128)
-    criterion_model = SupConLoss(temperature=opt.temp)
+    #model = SupConResNet('resnet18')
+    criterion_model = SupConLoss(temperature=opt.temp, contrast_mode='one')
     classifier = LinearClassifier(n_classes=NUM_CLASSES)
-    class_weights = [0.25, 1.0, 1.0, 1.0, 1.0]
-    criterion_classifier = torch.nn.CrossEntropyLoss(weight=torch.FloatTensor(class_weights).cuda())
+    #class_weights = [0.25, 1.0, 1.0, 1.0, 1.0]
+    criterion_classifier = torch.nn.CrossEntropyLoss()
     
     if torch.cuda.is_available():
         if torch.cuda.device_count() > 1:
@@ -194,7 +197,7 @@ def train_classifier(train_loader, model, classifier, criterion, optimizer, epoc
             labels = labels.cuda(non_blocking=True)
         bsz = labels.shape[0]
         
-        warmup_learning_rate(opt, epoch, idx, len(train_loader), optimizer)
+        #warmup_learning_rate(opt, epoch, idx, len(train_loader), optimizer)
         
         with torch.no_grad():
             features = model.encoder(images)
@@ -249,10 +252,16 @@ optimize_dict = {
     'RMSprop': optim.RMSprop,
     'Adam': optim.Adam
 }
+
 def set_optimizer(opt, model, class_str='', optim_choice='SGD'):
     dict_opt = vars(opt)
     optimizer = optimize_dict[optim_choice]
-    optimizer = optimizer(model.parameters(),
+    if optim_choice == 'Adam':
+        optimizer = optimizer(model.parameters(),
+                    lr=dict_opt['learning_rate'+class_str],
+                    weight_decay=dict_opt['weight_decay'+class_str])   
+    else:
+        optimizer = optimizer(model.parameters(),
                     lr=dict_opt['learning_rate'+class_str],
                     momentum=dict_opt['momentum'+class_str],
                     weight_decay=dict_opt['weight_decay'+class_str])
@@ -266,7 +275,9 @@ def adjust_learning_rate(args, optimizer, epoch, class_str=''):
         lr = eta_min + (lr - eta_min) * (
                 1 + math.cos(math.pi * epoch / args.epochs)) / 2
     else:
-        steps = np.sum(epoch > np.asarray(dict_args['lr_decay_epochs'+class_str]))
+        lr_decay_epochs_arr = list(map(int, dict_args['lr_decay_epochs'+class_str].split(',')))
+        lr_decay_epochs_arr = np.asarray(lr_decay_epochs_arr)
+        steps = np.sum(epoch > lr_decay_epochs_arr)
         if steps > 0:
             lr = lr * (dict_args['lr_decay_rate'+class_str] ** steps)
 
@@ -281,11 +292,11 @@ def main():
     train_loader, train_classifier_loader, val_loader = set_loader(opt)
     model, criterion_model, classifier, criterion_classifier = set_model(opt)
    
-    optimizer_model = set_optimizer(opt, model)
-    optimizer_classifier = set_optimizer(opt, classifier, '_classifier')
+    optimizer_model = set_optimizer(opt, model, optim_choice='SGD')
+    optimizer_classifier = set_optimizer(opt, classifier, class_str='_classifier', optim_choice='SGD')
     
     logger = SummaryWriter(log_dir=opt.tb_folder, flush_secs=2)
-    train_classifier_freq = 2
+    #train_classifier_freq = 2
     step = 0
     
     log_writer = open(opt.log_file, 'w')
@@ -299,7 +310,8 @@ def main():
         class_epoch = epoch - opt.epoch_start_classifier + 1
         if class_epoch > 0:
             adjust_learning_rate(opt, optimizer_classifier, class_epoch, '_classifier')
-            new_step, loss_ce, train_acc = train_classifier(train_classifier_loader, model, classifier, criterion_classifier, optimizer_classifier, epoch, opt, step, logger)
+            new_step, loss_ce, train_acc = train_classifier(train_classifier_loader, model, classifier, 
+                                                            criterion_classifier, optimizer_classifier, epoch, opt, step, logger)
             print('Classifier: Loss: {:.4f}, Acc: {}'.format(loss_ce, train_acc))
             log_writer.write('Classifier: Loss: {:.4f}, Acc: {}\n'.format(loss_ce, train_acc))
             loss, val_f1 = validate(val_loader, model, classifier, criterion_classifier, opt)
@@ -312,9 +324,10 @@ def main():
             ckpt = 'ckpt_epoch_{}.pth'.format(epoch)
             save_file = os.path.join(opt.save_folder, ckpt)
             save_model(model, optimizer_model, opt, epoch, save_file)
-            ckpt = 'ckpt_class_epoch_{}.pth'.format(epoch)
-            save_file = os.path.join(opt.save_folder, ckpt)
-            save_model(classifier, optimizer_classifier, opt, epoch, save_file)
+            if class_epoch > 0:
+                ckpt = 'ckpt_class_epoch_{}.pth'.format(epoch)
+                save_file = os.path.join(opt.save_folder, ckpt)
+                save_model(classifier, optimizer_classifier, opt, epoch, save_file)
             
     save_file = os.path.join(opt.save_folder, 'last.pth')
     save_model(model, optimizer_model, opt, opt.epochs, save_file)

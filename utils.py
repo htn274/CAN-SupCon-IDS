@@ -55,10 +55,9 @@ def cal_metric(label, pred):
     precision = np.diag(cm) / np.sum(cm, axis = 0)
     f1 = 2*recall*precision / (recall + precision)
     
-    fnr = []
-    total_samples = cm.sum(axis=1)
-    for i in range(n_classes):
-        fnr.append(100*(total_samples[i] - cm[i][i])/total_samples[i])
+    total_actual = np.sum(cm, axis=1)
+    true_predicted = np.diag(cm)
+    fnr = (total_actual - true_predicted)*100/total_actual
                    
     return cm, {
     'fnr': np.array(fnr),
