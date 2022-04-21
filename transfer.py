@@ -8,7 +8,7 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
-
+torch.manual_seed(0)
 from utils import cal_metric
 
 from dataset import CANDataset
@@ -17,6 +17,8 @@ from SupContrast.networks.resnet_big import SupConResNet
 
 from SupContrast.util import AverageMeter
 from SupContrast.util import accuracy
+
+T_NUM_CLASSES=4
 
 class LinearClassifier(nn.Module):
     def __init__(self, n_classes, feat_dim):
@@ -157,6 +159,10 @@ def train_whole(train_loader, model, criterion, optimizer, epoch):
         
     return losses.avg, accs.avg
 
+def print_results(results):
+    for key, values in results.items():
+        print(key, list("{0:0.4f}".format(i) for i in values))
+
 def evaluate(model, data_loader):
     total_pred = np.empty(shape=(0), dtype=int)
     total_label = np.empty(shape=(0), dtype=int)
@@ -173,10 +179,10 @@ def evaluate(model, data_loader):
             total_label = np.concatenate((total_label, labels), axis=0)
             
     cm, results = cal_metric(total_label, total_pred)
-    for key, values in results.items():
-        print(key, list("{0:0.4f}".format(i) for i in values))
+    print_results(results)
     return results
 
+       
 def build_fine_tuned_model(source_model, classifier, is_cuda=True, lr=0.0001):
     fine_tuned_model = TransferModel(source_model.encoder, classifier)
     if is_cuda:
@@ -185,18 +191,17 @@ def build_fine_tuned_model(source_model, classifier, is_cuda=True, lr=0.0001):
                                 momentum=0.9, weight_decay=0)
     return fine_tuned_model, optimizer
 
-T_NUM_CLASSES=4
-def main():
-    torch.manual_seed(0)
-    args = parse_args()
-    train_loader, val_loader = load_dataset(args, trial_id=1)
+def do_helper(args, trial_id):
+    train_loader, val_loader = load_dataset(args, trial_id=trial_id)
     source_model = load_source_model(args, ckpt_epoch=200)
     classifier, criterion, optimizer = build_top_classifier(n_classes=T_NUM_CLASSES, 
-                                                           feat_dim=512, lr=0.01)
+                                                           feat_dim=512, lr=0.0005)
+    transfer = 'transfer' in args.tf_algo
+    finetune = 'tune' in args.tf_algo
     # Train the classifier with a fixed pretrained model first
-    if 'transfer' in args.tf_algo:
+    if transfer:
         print('Training classifier ============')
-        classifier_n_epochs = 1 #30
+        classifier_n_epochs = 30
         for epoch in range(1, classifier_n_epochs + 1):
             loss, acc = train_classifier(train_loader, source_model, classifier, 
                               criterion, optimizer, epoch)
@@ -204,24 +209,43 @@ def main():
         
     fine_tuned_model, optimizer = build_fine_tuned_model(source_model, classifier,
                                                         is_cuda=True, lr=0.0001)
-    print('Transfer Results')
-    print('Evaluating on train set:')
-    evaluate(fine_tuned_model, train_loader)
-    print('Evaluating on test set:')
-    evaluate(fine_tuned_model, val_loader)
-    print('========================')
+    if transfer:
+        print('Transfer Results')
+        print('Evaluating on train set:')
+        evaluate(fine_tuned_model, train_loader)
+        print('Evaluating on test set:')
+        results = evaluate(fine_tuned_model, val_loader)
+        print('========================')
     
-    if 'tune' in args.tf_algo:
-        ft_n_epochs = 10
+    if finetune:
+        ft_n_epochs = 20
         for epoch in range(1, ft_n_epochs + 1):
             loss, acc = train_whole(train_loader, fine_tuned_model, 
                                     criterion, optimizer, epoch)
             print(f'Epoch {epoch}: loss={loss}, acc={acc}')
 
+        print('Fine-tuning Results')
         print('Evaluating on train set:')
         evaluate(fine_tuned_model, train_loader)
         print('Evaluating on test set:')
-        evaluate(fine_tuned_model, val_loader)
+        results = evaluate(fine_tuned_model, val_loader)
+        
+    return results
+        
+def main():
+    args = parse_args()
+    total_results = {}
+    max_trials = 5
+    for trial_id in range(1, max_trials + 1):
+        results = do_helper(args, trial_id)
+        for k, v in results.items():
+            total_results.setdefault(k, [])
+            total_results[k].append(v)
+            
+    print('Final results')
+    total_results = {k: np.stack(v, axis=0) for k, v in total_results.items()}
+    for k, v in total_results.items():
+        print(k, list("{0:0.4f}".format(i) for i in v.mean(axis=0)))
     
 if __name__ == '__main__':
     main()

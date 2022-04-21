@@ -57,28 +57,18 @@ def write_tfrecord(dataset, tfwriter):
         for x, y in zip(features, batch_data['label']):
             tfwriter.write(x, y)
             
-if __name__ == '__main__':
-    # Parse argument
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--data_path', type=str, default='../Data/')
-    parser.add_argument('--car_model', type=str, default=None)
-    parser.add_argument('--window_size', type=int)
-    parser.add_argument('--strided', type=int) 
-    parser.add_argument('--rid', type=int, default=1) 
-    
-    # args = parser.parse_args()
-    args, unknown = parser.parse_known_args()
-    print(args, unknown)
-    # data dir patern: '../Data/TFRecord_ID_DATA_HIST_w{window_size}_s{strided_size}'
-    if args.strided == None:
-        args.strided = args.window_size
+def train_test_split(**args):
+    """
+    """
+    if args['strided'] == None:
+        args['strided'] = args['window_size']
         
-    # data_dir = '../Data/TFRecord_ID_DATA_HIST_w{}_s{}'.format(args.window_size, args.strided)
-    if args.car_model is None:
-        data_dir = f'{args.data_path}/TFrecord_w{args.window_size}_s{args.strided}'
+    if args['car_model'] is None:
+        data_dir = f"{args['data_path']}/TFrecord_w{args['window_size']}_s{args['strided']}"
     else:
-        data_dir = f'{args.data_path}/TFrecord_{args.car_model}_w{args.window_size}_s{args.strided}'
-    out_dir = data_dir + '/{}'.format(args.rid)
+        data_dir = f"{args['data_path']}/TFrecord_{args['car_model']}_w{args['window_size']}_s{args['strided']}"
+        
+    out_dir = data_dir + '/{}'.format(args['rid'])
     train_dir = os.path.join(out_dir, 'train')
     val_dir = os.path.join(out_dir, 'val')
     if not os.path.exists(train_dir):
@@ -98,7 +88,7 @@ if __name__ == '__main__':
     for filename, dataset_size in data_info.items():
         print('Read from {}: {} records'.format(filename, dataset_size))
         dataset = tf.data.TFRecordDataset(filename)
-        dataset = dataset.map(lambda x: read_tfrecord(x, args.window_size), 
+        dataset = dataset.map(lambda x: read_tfrecord(x, args['window_size']), 
                                 num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset = dataset.shuffle(50000)
 
@@ -123,3 +113,17 @@ if __name__ == '__main__':
         
     print('Total training: ', total_train_size)
     print('Total validation: ', total_val_size)
+    
+            
+if __name__ == '__main__':
+    # Parse argument
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_path', type=str, default='../Data/')
+    parser.add_argument('--car_model', type=str, default=None)
+    parser.add_argument('--window_size', type=int)
+    parser.add_argument('--strided', type=int) 
+    parser.add_argument('--rid', type=int, default=1) 
+    
+    args = vars(parser.parse_args())
+    print(args)
+    train_test_split(**args)
