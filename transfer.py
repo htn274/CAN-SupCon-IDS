@@ -13,45 +13,37 @@ from utils import cal_metric
 
 from dataset import CANDataset
 from networks.simple_cnn import SupConCNN
-from SupContrast.networks.resnet_big import SupConResNet
+from networks.classifier import LinearClassifier
+from networks.transfer import TransferModel
+from SupContrast.networks.resnet_big import SupConResNet, SupCEResNet
 
 from SupContrast.util import AverageMeter
 from SupContrast.util import accuracy
 
-T_NUM_CLASSES=4
+torch.cuda.set_device(1)
 
-class LinearClassifier(nn.Module):
-    def __init__(self, n_classes, feat_dim):
-        super().__init__()
-        self.n_classes = n_classes
-        self.fc = nn.Linear(feat_dim, n_classes)
-        
-    def forward(self, x):
-        output = self.fc(x)
-        return output
-    
-class TransferModel(nn.Module):
-    def __init__(self, feat_extractor, classifier):
-        super().__init__()
-        self.encoder = copy.deepcopy(feat_extractor)
-        self.classifier = copy.deepcopy(classifier)
-        
-    def forward(self, x):
-        output = self.encoder(x)
-        output = self.classifier(output)
-        return output
-    
 def parse_args():
     parser = argparse.ArgumentParser('argument for training')
-    parser.add_argument('--data_path', type=str)
-    parser.add_argument('--pretrained_path', type=str)
-    parser.add_argument('--car_model', type=str)
-    parser.add_argument('--tf_algo', type=str) #'transfer', 'tune', 'transfer_tune'
+    parser.add_argument('--data_path', type=str, help='data path to train the target model')
+    parser.add_argument('--pretrained_model', type=str, default='supcon')
+    parser.add_argument('--pretrained_path', type=str, help='path which stores the pretrained model weights')
+    parser.add_argument('--car_model', type=str, help='car model', default=None)
+    parser.add_argument('--imprint', action='store_true')
+    parser.add_argument('--tf_algo', type=str, help='[transfer, tune, transfer_tune, akc]', default='transfer') #'transfer', 'tune', 'transfer_tune'
     
-    parser.add_argument('--window_size', type=int)
+    parser.add_argument('--num_classes', type=int, help='number of classes for target model')
+    parser.add_argument('--window_size', type=int, default=29)
     parser.add_argument('--strided', type=int, default=None)
-    parser.add_argument('--batch_size', type=int)
-    parser.add_argument('--num_workers', type=int)
+    parser.add_argument('--batch_size', type=int, default=256)
+    parser.add_argument('--num_workers', type=int, default=8)
+    
+    parser.add_argument('--source_ckpt', type=int, help='id checkpoint for pretrained model')
+    
+    parser.add_argument('--lr_transfer', type=float, help='learning rate for transfer process', default=0.001)
+    parser.add_argument('--lr_tune', type=float, help='learning rate for fine tuning process', default=0.00001)
+    parser.add_argument('--transfer_epochs', type=int, default=30)
+    parser.add_argument('--tune_epochs', type=int, default=10)
+    
     args = parser.parse_args()
     
     if args.strided == None:
@@ -59,12 +51,16 @@ def parse_args():
     return args
     
 def load_dataset(args, trial_id=1):
-    data_dir = f'TFrecord_{args.car_model}_w{args.window_size}_s{args.strided}'
+    if args.car_model is None:
+        data_dir = f'TFrecord_w{args.window_size}_s{args.strided}'
+    else:
+        data_dir = f'TFrecord_{args.car_model}_w{args.window_size}_s{args.strided}'
     data_dir = os.path.join(args.data_path, data_dir, str(trial_id))
     
-    train_dataset = CANDataset(data_dir, window_size = args.window_size)
+    train_dataset = CANDataset(data_dir,
+                               window_size = args.window_size)
     val_dataset = CANDataset(data_dir, 
-                            window_size = args.window_size,
+                             window_size = args.window_size,
                             is_train=False)
 
     train_loader = torch.utils.data.DataLoader(
@@ -85,11 +81,17 @@ def change_new_state_dict_parallel(state_dict):
     return new_state_dict
 
 def load_source_model(args, ckpt_epoch, is_cuda=True):
-    model_file = f'{args.pretrained_path}/ckpt_epoch_{ckpt_epoch}.pth'
-    ckpt = torch.load(model_file)
-    state_dict = change_new_state_dict_parallel(ckpt['model'])
-    model = SupConResNet(name='resnet18')
-    model.load_state_dict(state_dict=state_dict)
+    if args.pretrained_model == 'resnet':
+        model = SupCEResNet(num_classes=5)
+    else:
+        model = SupConResNet(name='resnet18')
+        
+    if args.pretrained_path is not None:
+        model_file = f'{args.pretrained_path}/ckpt_epoch_{ckpt_epoch}.pth'
+        ckpt = torch.load(model_file)
+        state_dict = change_new_state_dict_parallel(ckpt['model'])
+        model.load_state_dict(state_dict=state_dict)
+        
     if is_cuda:
         model = model.cuda()
     return model
@@ -163,7 +165,7 @@ def print_results(results):
     for key, values in results.items():
         print(key, list("{0:0.4f}".format(i) for i in values))
 
-def evaluate(model, data_loader):
+def evaluate(model, data_loader, is_print=True):
     total_pred = np.empty(shape=(0), dtype=int)
     total_label = np.empty(shape=(0), dtype=int)
 
@@ -179,7 +181,8 @@ def evaluate(model, data_loader):
             total_label = np.concatenate((total_label, labels), axis=0)
             
     cm, results = cal_metric(total_label, total_pred)
-    print_results(results)
+    if is_print:
+        print_results(results)
     return results
 
        
@@ -191,24 +194,58 @@ def build_fine_tuned_model(source_model, classifier, is_cuda=True, lr=0.0001):
                                 momentum=0.9, weight_decay=0)
     return fine_tuned_model, optimizer
 
+def imprint(model, classifier, data_loader, num_class, device):
+    print('Imprint the classifier of the model')
+    model.eval()
+    classifier.eval()
+    feat_size = 512
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(data_loader):
+            inputs = inputs.to(device)
+            targets = targets.to(device)
+            # compute output
+            output = model.encoder(inputs) 
+            if batch_idx == 0:
+                output_stack = output
+                target_stack = targets
+                feat_size=output.size(1)
+            else:
+                output_stack = torch.cat((output_stack, output), 0)
+                target_stack = torch.cat((target_stack, targets), 0)
+    
+    new_weight = torch.zeros(num_class, feat_size).to(device)
+    for i in range(num_class):
+        tmp = output_stack[target_stack == i].mean(0)
+        new_weight[i] = tmp / tmp.norm(p=2)
+        
+    classifier.fc.weight.data = new_weight
+    return classifier
+
 def do_helper(args, trial_id):
     train_loader, val_loader = load_dataset(args, trial_id=trial_id)
-    source_model = load_source_model(args, ckpt_epoch=200)
-    classifier, criterion, optimizer = build_top_classifier(n_classes=T_NUM_CLASSES, 
-                                                           feat_dim=512, lr=0.0005)
+    source_model = load_source_model(args, ckpt_epoch=args.source_ckpt)
+    classifier, criterion, optimizer =\
+                                    build_top_classifier(n_classes=args.num_classes, 
+                                                         feat_dim=512,
+                                                         lr=args.lr_transfer)
+    print('Shape classifier: ', classifier.fc.weight.shape)
+    if args.imprint:
+        classifier = imprint(source_model, classifier, train_loader, num_class=4, device='cuda')
+        
+    print('Shape classifier: ', classifier.fc.weight.shape)
     transfer = 'transfer' in args.tf_algo
     finetune = 'tune' in args.tf_algo
     # Train the classifier with a fixed pretrained model first
     if transfer:
         print('Training classifier ============')
-        classifier_n_epochs = 30
-        for epoch in range(1, classifier_n_epochs + 1):
+        transfer_epochs = args.transfer_epochs
+        for epoch in range(1, transfer_epochs + 1):
             loss, acc = train_classifier(train_loader, source_model, classifier, 
                               criterion, optimizer, epoch)
             print(f'Epoch {epoch}: loss={loss}, acc={acc}')
         
     fine_tuned_model, optimizer = build_fine_tuned_model(source_model, classifier,
-                                                        is_cuda=True, lr=0.0001)
+                                                is_cuda=True, lr=args.lr_tune)
     if transfer:
         print('Transfer Results')
         print('Evaluating on train set:')
@@ -218,12 +255,17 @@ def do_helper(args, trial_id):
         print('========================')
     
     if finetune:
-        ft_n_epochs = 20
-        for epoch in range(1, ft_n_epochs + 1):
+        tune_epochs = args.tune_epochs
+        for epoch in range(1, tune_epochs + 1):
             loss, acc = train_whole(train_loader, fine_tuned_model, 
                                     criterion, optimizer, epoch)
             print(f'Epoch {epoch}: loss={loss}, acc={acc}')
-
+            if epoch % 5 == 0:
+                results = evaluate(fine_tuned_model, train_loader, is_print=False)
+                print('Train f1: ', results['f1'].mean())
+                results = evaluate(fine_tuned_model, val_loader, is_print=False)
+                print('Val f1: ', results['f1'].mean())
+                
         print('Fine-tuning Results')
         print('Evaluating on train set:')
         evaluate(fine_tuned_model, train_loader)
@@ -235,7 +277,7 @@ def do_helper(args, trial_id):
 def main():
     args = parse_args()
     total_results = {}
-    max_trials = 5
+    max_trials = 1
     for trial_id in range(1, max_trials + 1):
         results = do_helper(args, trial_id)
         for k, v in results.items():
