@@ -7,9 +7,10 @@ from datetime import datetime
 
 from dataset import CANDataset
 from utils import get_prediction, cal_metric, print_results
-from networks.simple_cnn import SupConCNN, LinearClassifier
-from SupContrast.networks.resnet_big import SupConResNet
+from networks.simple_cnn import SupConCNN
+from networks.classifier import LinearClassifier
 
+from SupContrast.networks.resnet_big import SupConResNet
 from SupContrast.util import set_optimizer, save_model
 from SupContrast.util import AverageMeter
 from SupContrast.util import adjust_learning_rate, warmup_learning_rate, accuracy
@@ -135,10 +136,10 @@ def set_loader(opt):
     return train_loader, train_classifier_loader, val_loader
 
 def set_model(opt):
-    model = SupConCNN(feat_dim=128)
-    #model = SupConResNet('resnet18')
+    #model = SupConCNN(feat_dim=128)
+    model = SupConResNet('resnet18')
     criterion_model = SupConLoss(temperature=opt.temp, contrast_mode='one')
-    classifier = LinearClassifier(n_classes=NUM_CLASSES)
+    classifier = LinearClassifier(n_classes=NUM_CLASSES, feat_dim=512)
     #class_weights = [0.25, 1.0, 1.0, 1.0, 1.0]
     criterion_classifier = torch.nn.CrossEntropyLoss()
     

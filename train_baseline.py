@@ -10,6 +10,7 @@ from utils import get_prediction, cal_metric, print_results
 from networks.inception import InceptionResnet
 from networks.simple_cnn import BaselineCNNClassifier
 
+from SupContrast.networks.resnet_big import SupCEResNet
 from SupContrast.util import set_optimizer, save_model
 from SupContrast.util import AverageMeter
 from SupContrast.util import adjust_learning_rate, warmup_learning_rate, accuracy
@@ -24,7 +25,8 @@ from sklearn.metrics import f1_score
 NUM_CLASSES = 5
 MODELS = {
    'inception': InceptionResnet,
-    'cnn': BaselineCNNClassifier 
+    'cnn': BaselineCNNClassifier,
+    'resnet18': SupCEResNet
 }
 
 def parse_option():
@@ -59,6 +61,7 @@ def parse_option():
     if torch.cuda.is_available():
         torch.cuda.set_device(opt.gpu_device)
         
+    opt.warm = False
     if opt.batch_size > 256:
         opt.warm = True
     if opt.warm:
@@ -114,7 +117,7 @@ def set_loader(opt):
 
 def set_model(opt):
     model = MODELS[opt.model]
-    model = model(n_classes=NUM_CLASSES)
+    model = model(num_classes=NUM_CLASSES)
     #class_weights = [0.25, 1.0, 1.0, 1.0, 1.0]
     #criterion = torch.nn.CrossEntropyLoss(weight=torch.FloatTensor(class_weights).cuda())
     criterion = torch.nn.CrossEntropyLoss()
