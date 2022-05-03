@@ -2,6 +2,8 @@ import os
 import argparse
 from tqdm.auto import tqdm
 import copy
+import multiprocessing
+from concurrent import futures
 
 import numpy as np
 import torch
@@ -20,7 +22,7 @@ from SupContrast.networks.resnet_big import SupConResNet, SupCEResNet
 from SupContrast.util import AverageMeter
 from SupContrast.util import accuracy
 
-torch.cuda.set_device(1)
+#torch.cuda.set_device(1)
 
 def parse_args():
     parser = argparse.ArgumentParser('argument for training')
@@ -165,7 +167,7 @@ def print_results(results):
     for key, values in results.items():
         print(key, list("{0:0.4f}".format(i) for i in values))
 
-def evaluate(model, data_loader, is_print=True):
+def evaluate(model, data_loader, is_print=False):
     total_pred = np.empty(shape=(0), dtype=int)
     total_label = np.empty(shape=(0), dtype=int)
 
@@ -228,66 +230,107 @@ def do_helper(args, trial_id):
                                     build_top_classifier(n_classes=args.num_classes, 
                                                          feat_dim=512,
                                                          lr=args.lr_transfer)
-    print('Shape classifier: ', classifier.fc.weight.shape)
+    #print('Shape classifier: ', classifier.fc.weight.shape)
     if args.imprint:
         classifier = imprint(source_model, classifier, train_loader, num_class=4, device='cuda')
         
-    print('Shape classifier: ', classifier.fc.weight.shape)
+    #print('Shape classifier: ', classifier.fc.weight.shape)
     transfer = 'transfer' in args.tf_algo
     finetune = 'tune' in args.tf_algo
     # Train the classifier with a fixed pretrained model first
     if transfer:
-        print('Training classifier ============')
+        #print('Training classifier ============')
         transfer_epochs = args.transfer_epochs
         for epoch in range(1, transfer_epochs + 1):
             loss, acc = train_classifier(train_loader, source_model, classifier, 
                               criterion, optimizer, epoch)
-            print(f'Epoch {epoch}: loss={loss}, acc={acc}')
+            #print(f'Epoch {epoch}: loss={loss}, acc={acc}')
         
     fine_tuned_model, optimizer = build_fine_tuned_model(source_model, classifier,
                                                 is_cuda=True, lr=args.lr_tune)
     if transfer:
-        print('Transfer Results')
-        print('Evaluating on train set:')
+        #print('Transfer Results')
+        #print('Evaluating on train set:')
         evaluate(fine_tuned_model, train_loader)
-        print('Evaluating on test set:')
+        #print('Evaluating on test set:')
         results = evaluate(fine_tuned_model, val_loader)
-        print('========================')
+        #print('========================')
     
     if finetune:
         tune_epochs = args.tune_epochs
         for epoch in range(1, tune_epochs + 1):
             loss, acc = train_whole(train_loader, fine_tuned_model, 
                                     criterion, optimizer, epoch)
-            print(f'Epoch {epoch}: loss={loss}, acc={acc}')
+            #print(f'Epoch {epoch}: loss={loss}, acc={acc}')
             if epoch % 5 == 0:
                 results = evaluate(fine_tuned_model, train_loader, is_print=False)
-                print('Train f1: ', results['f1'].mean())
+                #print('Train f1: ', results['f1'].mean())
                 results = evaluate(fine_tuned_model, val_loader, is_print=False)
-                print('Val f1: ', results['f1'].mean())
+                #print('Val f1: ', results['f1'].mean())
                 
-        print('Fine-tuning Results')
-        print('Evaluating on train set:')
-        evaluate(fine_tuned_model, train_loader)
-        print('Evaluating on test set:')
-        results = evaluate(fine_tuned_model, val_loader)
+        #print('Fine-tuning Results')
+        #print('Evaluating on train set:')
+        train_res = evaluate(fine_tuned_model, train_loader)
+        #print('Evaluating on test set:')
+        val_res = evaluate(fine_tuned_model, val_loader)
         
-    return results
+    return train_res, val_res
         
+def update_results(results, total_results):
+    for k, v in results.items():
+        total_results.setdefault(k, [])
+        total_results[k].append(v)
+        
+def print_total_results(results):
+    results = {k: np.stack(v, axis=0) for k, v in results.items()}
+    for k, v in results.items():
+        print(k, list("{0:0.4f}".format(i) for i in v.mean(axis=0)))
+        
+def main_multi():
+    num_cpu = multiprocessing.cpu_count()
+    max_trials = 5
+    workers = max(num_cpu, max_trials)
+    
+    args = parse_args()
+    train_total_results = {}
+    val_total_results = {}
+    with futures.ProcessPoolExecutor(workers) as executor:
+        to_do = []
+        for trial_id in range(1, max_trials + 1):
+            print('Submit : ', trial_id)
+            future = executor.submit(do_helper, args, trial_id)
+            to_do.append(future)
+
+        total_results = {}
+        for future in futures.as_completed(to_do):
+            try:
+                train_res, val_res = future.result()
+                update_results(train_res, train_total_results)
+                update_results(val_res, val_total_results)
+            except Exception as error:
+                print('An exception occurred: {}'.format(error))
+                
+    print('FINAL RESULTS')
+    print('Train: ')
+    print_total_results(train_total_results)
+    print('Validation: ')
+    print_total_results(val_total_results)
+
 def main():
     args = parse_args()
-    total_results = {}
-    max_trials = 1
+    train_total_results = {}
+    val_total_results = {}
+    max_trials = 5
     for trial_id in range(1, max_trials + 1):
-        results = do_helper(args, trial_id)
-        for k, v in results.items():
-            total_results.setdefault(k, [])
-            total_results[k].append(v)
+        train_res, val_res = do_helper(args, trial_id)
+        update_results(train_res, train_total_results)
+        update_results(val_res, val_total_results)
             
-    print('Final results')
-    total_results = {k: np.stack(v, axis=0) for k, v in total_results.items()}
-    for k, v in total_results.items():
-        print(k, list("{0:0.4f}".format(i) for i in v.mean(axis=0)))
+    print('FINAL RESULTS')
+    print('Train: ')
+    print_total_results(train_total_results)
+    print('Validation: ')
+    print_total_results(val_total_results)
     
 if __name__ == '__main__':
-    main()
+    main_multi()
