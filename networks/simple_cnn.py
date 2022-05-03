@@ -41,23 +41,23 @@ class SupConCNN(nn.Module):
         feat = F.normalize(feat, dim=1)
         return feat
     
-class LinearClassifier(nn.Module):
-    def __init__(self, n_classes):
-        super().__init__()
-        feat_dim = CNNEncoder.output_shape
-        self.n_classes = n_classes
-        self.fc = nn.Linear(feat_dim, n_classes)
-        
-    def forward(self, x):
-        output = self.fc(x)
-        return output
+#class LinearClassifier(nn.Module):
+#    def __init__(self, n_classes):
+#        super().__init__()
+#        feat_dim = CNNEncoder.output_shape
+#        self.n_classes = n_classes
+#        self.fc = nn.Linear(feat_dim, n_classes)
+#        
+#    def forward(self, x):
+#        output = self.fc(x)
+#        return output
     
 class BaselineCNNClassifier(nn.Module):
-    def __init__(self, n_classes):
+    def __init__(self, num_classes):
         super().__init__()
         self.encoder = CNNEncoder()
         feat_dim = CNNEncoder.output_shape
-        self.n_classes = n_classes
+        self.n_classes = num_classes
         self.fc = nn.Linear(feat_dim, n_classes)
         
     def forward(self, x):
