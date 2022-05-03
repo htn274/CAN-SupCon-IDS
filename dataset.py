@@ -15,6 +15,7 @@ class CANDataset(Dataset):
         else:
             self.root_dir = os.path.join(root_dir, 'val')
             
+        # self.num_classes = num_classes
         self.include_data = include_data
         self.is_train = is_train
         self.transform = transform

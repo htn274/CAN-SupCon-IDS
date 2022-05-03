@@ -40,6 +40,7 @@ def parse_option():
     parser.add_argument('--epochs', type=int)
     parser.add_argument('--num_workers', type=int, default=0)
     parser.add_argument('--gpu_device', type=int, default=0)
+    parser.add_argument('--rid', type=int, default=1)
     
     # optimization
     parser.add_argument('--learning_rate', type=float, default=0.2,
@@ -78,7 +79,7 @@ def parse_option():
     opt.model_path = './save/{}/models/'
     opt.tb_path = './save/{}/runs/'
     current_time = datetime.now().strftime("%D_%H%M%S").replace('/', '')
-    opt.model_name = f'{opt.model}_lr{opt.learning_rate}_bs{opt.batch_size}_{opt.epochs}epochs_{current_time}'
+    opt.model_name = f'{opt.model}{opt.rid}_lr{opt.learning_rate}_bs{opt.batch_size}_{opt.epochs}epochs_{current_time}'
     if opt.cosine:
         opt.model_name = '{}_cosine'.format(opt.model_name)
     if opt.warm:
@@ -96,9 +97,10 @@ def parse_option():
 
 
 def set_loader(opt):
-    train_dataset = CANDataset(root_dir=opt.data_dir, 
+    data_dir = f'{opt.data_dir}/{opt.rid}/' 
+    train_dataset = CANDataset(root_dir=data_dir, 
                                window_size=opt.window_size)
-    val_dataset = CANDataset(root_dir=opt.data_dir, 
+    val_dataset = CANDataset(root_dir=data_dir, 
                              window_size=opt.window_size,
                              is_train=False)
     #train_dataset.total_size = 100000

@@ -37,6 +37,7 @@ def parse_option():
     parser.add_argument('--epochs', type=int)
     parser.add_argument('--num_workers', type=int, default=0)
     parser.add_argument('--gpu_device', type=int, default=0)
+    parser.add_argument('--rid', type=int, default=1)
     
     # temperature
     parser.add_argument('--temp', type=float, default=0.1,
@@ -89,7 +90,7 @@ def parse_option():
     opt.model_path = './save/{}/models/'
     opt.tb_path = './save/{}/runs/'
     current_time = datetime.now().strftime("%D_%H%M%S").replace('/', '')
-    opt.model_name = f'SupCon_{opt.model}_lr{opt.learning_rate}_{opt.learning_rate_classifier}_bs{opt.batch_size}_{opt.epochs}epoch_temp{opt.temp}_{current_time}'
+    opt.model_name = f'SupCon_{opt.model}{opt.rid}_lr{opt.learning_rate}_{opt.learning_rate_classifier}_bs{opt.batch_size}_{opt.epochs}epoch_temp{opt.temp}_{current_time}'
     if opt.cosine:
         opt.model_name = '{}_cosine'.format(opt.model_name)
     if opt.warm:
@@ -110,9 +111,10 @@ def parse_option():
 
 
 def set_loader(opt):
-    train_dataset = CANDataset(root_dir=opt.data_dir, 
+    data_dir = f'{opt.data_dir}/{opt.rid}/'
+    train_dataset = CANDataset(root_dir=data_dir, 
                                window_size=opt.window_size)
-    val_dataset = CANDataset(root_dir=opt.data_dir, 
+    val_dataset = CANDataset(root_dir=data_dir, 
                              window_size=opt.window_size,
                              is_train=False)
     #train_dataset.total_size = 100000
@@ -336,5 +338,6 @@ def main():
     save_model(classifier, optimizer_classifier, opt, opt.epochs, save_file)
         
 
+# python3 train_supcon.py --data_dir ../Data/TFrecord_w29_s15/ --model resnet18 --save_freq 10 --window_size 29 --epochs 200 --num_workers 8 --temp 0.07 --learning_rate 0.1 --learning_rate_classifier 0.01 --cosine --epoch_start_classifier 170 --batch_size 1024 --rid 5 
 if __name__ == '__main__':
     main()
