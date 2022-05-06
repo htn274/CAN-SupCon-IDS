@@ -117,7 +117,7 @@ def train_classifier(train_loader, model, classifier, criterion, optimizer, epoc
     losses = AverageMeter()
     accs = AverageMeter()
     
-    for indx, (inputs, labels) in tqdm(enumerate(train_loader)):
+    for indx, (inputs, labels) in enumerate(train_loader):
         inputs = inputs.cuda(non_blocking=True)
         labels = labels.cuda(non_blocking=True)
         bsz = labels.shape[0]
@@ -144,7 +144,7 @@ def train_whole(train_loader, model, criterion, optimizer, epoch):
     losses = AverageMeter()
     accs = AverageMeter()
     
-    for indx, (inputs, labels) in tqdm(enumerate(train_loader)):
+    for indx, (inputs, labels) in enumerate(train_loader):
         inputs = inputs.cuda(non_blocking=True)
         labels = labels.cuda(non_blocking=True)
         bsz = labels.shape[0]
@@ -173,7 +173,7 @@ def evaluate(model, data_loader, is_print=False):
 
     model.eval()
     with torch.no_grad():
-        for images, labels in tqdm(data_loader):
+        for images, labels in data_loader:
             images = images.cuda(non_blocking=True)
             outputs = model(images)
             _, pred = outputs.topk(1, 1, True, True)
@@ -274,6 +274,7 @@ def do_helper(args, trial_id):
         #print('Evaluating on test set:')
         val_res = evaluate(fine_tuned_model, val_loader)
         
+    print('Finish : ', trial_id)
     return train_res, val_res
         
 def update_results(results, total_results):
