@@ -17,10 +17,9 @@ from dataset import CANDataset
 from networks.simple_cnn import SupConCNN
 from networks.classifier import LinearClassifier
 from networks.transfer import TransferModel
-from SupContrast.networks.resnet_big import SupConResNet, SupCEResNet
+from networks.resnet_big import SupConResNet, SupCEResNet
 
-from SupContrast.util import AverageMeter
-from SupContrast.util import accuracy
+from supcon.util import AverageMeter, accuracy
 
 #torch.cuda.set_device(1)
 

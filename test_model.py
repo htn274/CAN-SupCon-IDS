@@ -12,7 +12,7 @@ from utils import cal_metric, load_dataset, change_new_state_dict
 
 from networks.classifier import LinearClassifier
 from networks.transfer import TransferModel
-from SupContrast.networks.resnet_big import SupConResNet, SupCEResNet
+from networks.resnet_big import SupConResNet, SupCEResNet
 
 
 def parse_args():
@@ -95,4 +95,4 @@ def test(args, verbose=False, is_cuda=True):
                   
 if __name__ == '__main__':
     args = parse_args()
-    test(args)
+    test(args, verbose=True, is_cuda=True)

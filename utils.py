@@ -69,6 +69,20 @@ def cal_metric(label, pred):
     'f1': f1
     }
 
+def get_prediction(model, dataloader):
+    with torch.no_grad():
+        model.eval()
+        prediction = np.zeros(len(dataloader.dataset))
+        labels = np.zeros(len(dataloader.dataset))
+        k = 0
+        for images, target in dataloader:
+            if cuda:
+                images = images.cuda()
+            prediction[k:k+len(images)] = np.argmax(model(images).data.cpu().numpy(), axis=1)
+            labels[k:k+len(images)] = target.numpy()
+            k += len(images)
+    return prediction, labels
+
 def draw_confusion_matrix(cm):
     cm_df = pd.DataFrame(cm,
                      index = classes, 

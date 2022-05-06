@@ -10,10 +10,10 @@ from utils import get_prediction, cal_metric, print_results
 from networks.inception import InceptionResnet
 from networks.simple_cnn import BaselineCNNClassifier
 
-from SupContrast.networks.resnet_big import SupCEResNet
-from SupContrast.util import set_optimizer, save_model
-from SupContrast.util import AverageMeter
-from SupContrast.util import adjust_learning_rate, warmup_learning_rate, accuracy
+from networks.resnet_big import SupCEResNet
+from supcon.util import set_optimizer, save_model
+from supcon.util import AverageMeter
+from supcon.util import adjust_learning_rate, warmup_learning_rate, accuracy
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
