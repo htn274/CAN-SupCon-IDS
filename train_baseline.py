@@ -19,8 +19,9 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
-
 from sklearn.metrics import f1_score
+
+from focalloss import FocalLoss
 
 NUM_CLASSES = 5
 MODELS = {
@@ -43,6 +44,8 @@ def parse_option():
     parser.add_argument('--rid', type=int, default=1)
     
     # optimization
+    parser.add_argument('--gamma', type=int, default=0,
+                        help='gamma hyperparameter for focal loss')
     parser.add_argument('--learning_rate', type=float, default=0.2,
                         help='learning rate')
     parser.add_argument('--lr_decay_epochs', type=str, default='350,400,450',
@@ -79,7 +82,7 @@ def parse_option():
     opt.model_path = './save/{}/models/'
     opt.tb_path = './save/{}/runs/'
     current_time = datetime.now().strftime("%D_%H%M%S").replace('/', '')
-    opt.model_name = f'{opt.model}{opt.rid}_lr{opt.learning_rate}_bs{opt.batch_size}_{opt.epochs}epochs_{current_time}'
+    opt.model_name = f'{opt.model}{opt.rid}_gamma{opt.gamma}_lr{opt.learning_rate}_bs{opt.batch_size}_{opt.epochs}epochs_{current_time}'
     if opt.cosine:
         opt.model_name = '{}_cosine'.format(opt.model_name)
     if opt.warm:
@@ -93,6 +96,7 @@ def parse_option():
     if not os.path.isdir(opt.save_folder):
         os.makedirs(opt.save_folder, exist_ok=True)
         
+    opt.log_file = f'./save/{opt.model_name}/log'
     return opt
 
 
@@ -118,11 +122,13 @@ def set_loader(opt):
     return train_loader, val_loader
 
 def set_model(opt):
-    model = MODELS[opt.model]
+    # model = MODELS[opt.model]
+    model = SupCEResNet
     model = model(num_classes=NUM_CLASSES)
     #class_weights = [0.25, 1.0, 1.0, 1.0, 1.0]
     #criterion = torch.nn.CrossEntropyLoss(weight=torch.FloatTensor(class_weights).cuda())
     criterion = torch.nn.CrossEntropyLoss()
+    #criterion = FocalLoss(gamma=opt.gamma)
     if torch.cuda.is_available():
         model = model.cuda()
         criterion = criterion.cuda()
@@ -200,17 +206,20 @@ def main():
                           weight_decay=opt.weight_decay)
     
     logger = SummaryWriter(log_dir=opt.tb_folder, flush_secs=2)
+    log_writer = open(opt.log_file, 'w')
     step = 0
     for epoch in range(1, opt.epochs + 1):
         adjust_learning_rate(opt, optimizer, epoch)
         
         step, loss, train_acc = train(train_loader, model, criterion, optimizer, epoch, opt, logger, step)
         print('Epoch: {}, Loss: {}, Acc: {}'.format(epoch, loss, train_acc))
+        log_writer.write('Epoch: {}, Loss: {}, Acc: {}\n'.format(epoch, loss, train_acc))
         
         if epoch % 2 == 0:
             loss, val_f1 = validate(val_loader, model, criterion, opt)
             logger.add_scalar('loss/val', loss, step)
             print('Validation: Loss: {}, F1: {}'.format(loss, val_f1))
+            log_writer.write('Validation: Loss: {}, F1: {}\n'.format(loss, val_f1))
 
         if epoch % opt.save_freq == 0:
             ckpt = 'ckpt_epoch_{}.pth'.format(epoch)
@@ -219,7 +228,7 @@ def main():
             
     save_file = os.path.join(opt.save_folder, 'last.pth')
     save_model(model, optimizer, opt, opt.epochs, save_file)
-        
+    log_writer.close() 
 
 if __name__ == '__main__':
     main()

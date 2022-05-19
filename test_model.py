@@ -52,7 +52,7 @@ def load_model(args, verbose=False, is_cuda=True):
         model = load_models_weights(args, model, verbose)
     else:
         supcon_model = SupConResNet(name='resnet18')
-        classifier = LinearClassifier(n_classes=5, feat_dim=512)
+        classifier = LinearClassifier(n_classes=5, feat_dim=128)
         supcon_model = load_models_weights(args, supcon_model, verbose)
         classifier = load_models_weights(args, classifier, verbose)
         model = TransferModel(supcon_model.encoder, classifier)

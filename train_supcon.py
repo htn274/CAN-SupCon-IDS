@@ -16,6 +16,8 @@ from supcon.util import AverageMeter
 from supcon.util import adjust_learning_rate, warmup_learning_rate, accuracy
 from supcon.losses import SupConLoss
 
+from focalloss import FocalLoss
+
 import torch
 from torch.utils.tensorboard import SummaryWriter
 import torch.optim as optim
@@ -141,8 +143,9 @@ def set_model(opt):
     #model = SupConCNN(feat_dim=128)
     model = SupConResNet('resnet18')
     criterion_model = SupConLoss(temperature=opt.temp, contrast_mode='one')
-    classifier = LinearClassifier(n_classes=NUM_CLASSES, feat_dim=512)
+    classifier = LinearClassifier(n_classes=NUM_CLASSES, feat_dim=128)
     #class_weights = [0.25, 1.0, 1.0, 1.0, 1.0]
+    #criterion_classifier = FocalLoss(gamma=0.0) #torch.nn.CrossEntropyLoss()
     criterion_classifier = torch.nn.CrossEntropyLoss()
     
     if torch.cuda.is_available():
