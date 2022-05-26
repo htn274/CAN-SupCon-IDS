@@ -17,15 +17,20 @@ python3 train_supcon.py --data_dir ../Data/TFrecord_w29_s15/ --model resnet18 --
 ### Transfer
 
 ```
-python3 transfer.py --data_path ../Data/Survival/ --car_model Spark --window_size 29 --num_classes 4 --lr_transfer 0.01 --lr_tune 0.001 --transfer_epochs 50 --tune_epochs 10 --tf_algo transfer_tune --pretrained_model resnet --pretrained_path save/resnet181_lr0.0005_bs256_50epochs_050122_093024_cosine/models/ --source_ckpt 50
+python3 transfer.py --data_path ../Data/Survival/ --car_model Spark --pretrained_model resnet --tf_algo tune --num_classes 4 --window_size 29 --strided 10 --lr_tune 0.001 --tune_epochs 20
 ```
 
 ```
-python3 transfer.py --data_path ../Data/Survival/ --car_model Spark --window_size 29 --num_classes 4 --lr_transfer 0.01 --lr_tune 0.001 --transfer_epochs 40 --tune_epochs 20 --tf_algo transfer_tune --pretrained_model supcon --pretrained_path ./save/SupCon_resnet182_lr0.1_0.01_bs1024_200epoch_temp0.07_042822_144940_cosine_warm/models/ --source_ckpt 100
+python3 transfer.py --data_path ../Data/Survival/ --car_model Spark --window_size 29 --num_classes 4 --lr_transfer 0.01 --lr_tune 0.001 --transfer_epochs 50 --tune_epochs 10 --tf_algo transfer_tune --pretrained_model resnet --pretrained_path save/smallresnet18.ce1_gamma0_lr0.001_bs256_50epochs_051822_100142_cosine/models/ --source_ckpt 50
+```
+
+```
+python3 transfer.py --data_path ../Data/Survival/ --car_model Spark --window_size 29 --strided 10 --num_classes 4 --lr_transfer 0.01 --lr_tune 0.001 --transfer_epochs 40 --tune_epochs 20 --tf_algo transfer_tune --pretrained_model supcon --pretrained_path save/SupCon_resnet18.ce2_lr0.05_0.01_bs512_200epoch_temp0.07_052322_102305_cosine_warm/models/ --source_ckpt 200
 ```
 
 ### Train test split
 
 ```
-python3 train_test_split.py --data_path ../Data/ --window_size 29 --strided 15 --rid 2
+python3 train_test_split.py --data_path ../Data/ --car_model None --window_size 29 --strided 15 --rid 2
 ```
+

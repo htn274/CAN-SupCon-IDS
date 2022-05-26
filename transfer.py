@@ -26,7 +26,7 @@ from supcon.util import AverageMeter, accuracy
 def parse_args():
     parser = argparse.ArgumentParser('argument for training')
     parser.add_argument('--data_path', type=str, help='data path to train the target model')
-    parser.add_argument('--pretrained_model', type=str, default='supcon')
+    parser.add_argument('--pretrained_model', type=str, default='supcon') #resnet
     parser.add_argument('--pretrained_path', type=str, help='path which stores the pretrained model weights')
     parser.add_argument('--car_model', type=str, help='car model', default=None)
     parser.add_argument('--imprint', action='store_true')
@@ -199,7 +199,7 @@ def imprint(model, classifier, data_loader, num_class, device):
     print('Imprint the classifier of the model')
     model.eval()
     classifier.eval()
-    feat_size = 512
+    feat_size = 128
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(data_loader):
             inputs = inputs.to(device)
@@ -227,7 +227,7 @@ def do_helper(args, trial_id):
     source_model = load_source_model(args, ckpt_epoch=args.source_ckpt)
     classifier, criterion, optimizer =\
                                     build_top_classifier(n_classes=args.num_classes, 
-                                                         feat_dim=512,
+                                                         feat_dim=128,
                                                          lr=args.lr_transfer)
     #print('Shape classifier: ', classifier.fc.weight.shape)
     if args.imprint:

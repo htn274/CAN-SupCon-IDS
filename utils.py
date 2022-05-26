@@ -38,7 +38,7 @@ def change_new_state_dict(state_dict):
         new_state_dict[k] = v
     return new_state_dict
 
-def plot_embeddings(embeddings, targets, xlim=None, ylim=None):
+def plot_embeddings(embeddings, targets, xlim=None, ylim=None, save_dir=None):
     classes = ['Normal', 'DoS', 'Fuzzy', 'gear', 'RPM']
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728','#9467bd',]
     n_classes = len(classes)
@@ -51,6 +51,9 @@ def plot_embeddings(embeddings, targets, xlim=None, ylim=None):
     if ylim:
         plt.ylim(ylim[0], ylim[1])
     plt.legend(classes)
+    
+    if save_dir is not None:
+        plt.savefig(save_dir, dpi=300)
 
 def cal_metric(label, pred):
     cm = confusion_matrix(label, pred)
@@ -83,15 +86,17 @@ def get_prediction(model, dataloader):
             k += len(images)
     return prediction, labels
 
-def draw_confusion_matrix(cm):
+def draw_confusion_matrix(cm, classes, save_dir=None):
     cm_df = pd.DataFrame(cm,
                      index = classes, 
                      columns = classes)
     plt.figure(figsize=(10,8))
-    sns.heatmap(cm_df, annot=True)
+    sns.heatmap(cm_df, annot=True, cmap='YlGnBu', cbar=False, linewidths=0.5)
     plt.title('Confusion Matrix')
-    plt.ylabel('Actal Values')
+    plt.ylabel('Actual Values')
     plt.xlabel('Predicted Values')
+    if save_dir is not None:
+        plt.savefig(save_dir, dpi=300)
     plt.show()
     
 def print_results(results):
