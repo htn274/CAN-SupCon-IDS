@@ -21,7 +21,7 @@ python3 transfer.py --data_path ../Data/Survival/ --car_model Spark --pretrained
 ```
 
 ```
-python3 transfer.py --data_path ../Data/Survival/ --car_model Spark --window_size 29 --num_classes 4 --lr_transfer 0.01 --lr_tune 0.001 --transfer_epochs 50 --tune_epochs 10 --tf_algo transfer_tune --pretrained_model resnet --pretrained_path save/smallresnet18.ce1_gamma0_lr0.001_bs256_50epochs_051822_100142_cosine/models/ --source_ckpt 50
+python3 transfer.py --data_path ../Data/Survival/ --car_model Spark --window_size 29 --strided 10 --num_classes 4 --lr_transfer 0.01 --lr_tune 0.001 --transfer_epochs 50 --tune_epochs 10 --tf_algo transfer_tune --pretrained_model resnet --pretrained_path save/smallresnet18.ce1_gamma0_lr0.001_bs256_50epochs_051822_100142_cosine/models/ --source_ckpt 50
 ```
 
 ```
