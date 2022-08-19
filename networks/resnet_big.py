@@ -73,7 +73,7 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, in_channel=1, zero_init_residual=False):
+    def __init__(self, block, num_blocks, in_channel=9, zero_init_residual=False):
         super(ResNet, self).__init__()
         self.in_planes = 16
 
@@ -191,7 +191,7 @@ class SupCEResNet(nn.Module):
     def __init__(self, name='resnet18', num_classes=10):
         super(SupCEResNet, self).__init__()
         model_fun, dim_in = model_dict[name]
-        self.encoder = model_fun()
+        self.encoder = model_fun(in_channel=9)
         self.fc = nn.Linear(dim_in, num_classes)
 
     def forward(self, x):

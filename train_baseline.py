@@ -21,8 +21,6 @@ import torch.optim as optim
 import torch.backends.cudnn as cudnn
 from sklearn.metrics import f1_score
 
-from focalloss import FocalLoss
-
 NUM_CLASSES = 5
 MODELS = {
    'inception': InceptionResnet,
@@ -102,11 +100,8 @@ def parse_option():
 
 def set_loader(opt):
     data_dir = f'{opt.data_dir}/{opt.rid}/' 
-    train_dataset = CANDataset(root_dir=data_dir, 
-                               window_size=opt.window_size)
-    val_dataset = CANDataset(root_dir=data_dir, 
-                             window_size=opt.window_size,
-                             is_train=False)
+    train_dataset = CANDataset(root_dir=data_dir,)
+    val_dataset = CANDataset(root_dir=data_dir, is_train=False)
     #train_dataset.total_size = 100000
     #val_dataset.total_size = 10000
     print('Train size: ', len(train_dataset))
