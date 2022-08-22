@@ -21,7 +21,7 @@ import torch.optim as optim
 import torch.backends.cudnn as cudnn
 from sklearn.metrics import f1_score
 
-from focalloss import FocalLoss
+#from focalloss import FocalLoss
 
 NUM_CLASSES = 5
 MODELS = {
@@ -210,12 +210,12 @@ def main():
     step = 0
     for epoch in range(1, opt.epochs + 1):
         adjust_learning_rate(opt, optimizer, epoch)
-        
+       
         step, loss, train_acc = train(train_loader, model, criterion, optimizer, epoch, opt, logger, step)
         print('Epoch: {}, Loss: {}, Acc: {}'.format(epoch, loss, train_acc))
         log_writer.write('Epoch: {}, Loss: {}, Acc: {}\n'.format(epoch, loss, train_acc))
         
-        if epoch % 2 == 0:
+        if epoch % 5 == 0:
             loss, val_f1 = validate(val_loader, model, criterion, opt)
             logger.add_scalar('loss/val', loss, step)
             print('Validation: Loss: {}, F1: {}'.format(loss, val_f1))
