@@ -210,7 +210,7 @@ def main():
         print('Epoch: {}, Loss: {}, Acc: {}'.format(epoch, loss, train_acc))
         log_writer.write('Epoch: {}, Loss: {}, Acc: {}\n'.format(epoch, loss, train_acc))
         
-        if epoch % 2 == 0:
+        if epoch % 5 == 0:
             loss, val_f1 = validate(val_loader, model, criterion, opt)
             logger.add_scalar('loss/val', loss, step)
             print('Validation: Loss: {}, F1: {}'.format(loss, val_f1))
