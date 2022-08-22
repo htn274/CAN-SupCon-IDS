@@ -3,7 +3,8 @@ import torch
 import os
 from torch.utils.data import Dataset
 from pathlib import Path
- 
+from torchvision import transforms
+
 class CANDataset(Dataset):
     def __init__(self, root_dir, is_train=True, transform=None):
         self.root_dir = Path(root_dir) / ('train' if is_train else 'val')
@@ -18,7 +19,9 @@ class CANDataset(Dataset):
         X, y = data['X'], data['y']
         X_tensor = torch.tensor(X, dtype=torch.float32)
         y_tensor = torch.tensor(y, dtype=torch.long)
+        if self.transform:
+            X_tensor = self.transform(X_tensor)
         return X_tensor, y_tensor
-
+    
     def __len__(self):
         return self.total_size

@@ -16,6 +16,7 @@ from supcon.util import AverageMeter
 from supcon.util import adjust_learning_rate, warmup_learning_rate, accuracy
 
 import torch
+from torchvision import transforms
 from torch.utils.tensorboard import SummaryWriter
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
@@ -80,7 +81,7 @@ def parse_option():
     opt.model_path = './save/{}/models/'
     opt.tb_path = './save/{}/runs/'
     current_time = datetime.now().strftime("%D_%H%M%S").replace('/', '')
-    opt.model_name = f'{opt.model}{opt.rid}_gamma{opt.gamma}_lr{opt.learning_rate}_bs{opt.batch_size}_{opt.epochs}epochs_{current_time}'
+    opt.model_name = f'wavelet_{opt.model}{opt.rid}_gamma{opt.gamma}_lr{opt.learning_rate}_bs{opt.batch_size}_{opt.epochs}epochs_{current_time}'
     if opt.cosine:
         opt.model_name = '{}_cosine'.format(opt.model_name)
     if opt.warm:
@@ -100,8 +101,11 @@ def parse_option():
 
 def set_loader(opt):
     data_dir = f'{opt.data_dir}/{opt.rid}/' 
-    train_dataset = CANDataset(root_dir=data_dir,)
-    val_dataset = CANDataset(root_dir=data_dir, is_train=False)
+    mean= (126.8058,  10.4403,   8.1874,   7.2068,  13.9896,   9.2265,  10.9938, 4.6789, 9.6320)
+    std = (510.3837,  67.7702,  43.0419,  53.2845,  79.1804,  60.3768,  60.1881, 48.7489,  70.4148)
+    transform = transforms.Normalize(mean, std)
+    train_dataset = CANDataset(root_dir=data_dir, transform=transform)
+    val_dataset = CANDataset(root_dir=data_dir, is_train=False, transform=transform)
     #train_dataset.total_size = 100000
     #val_dataset.total_size = 10000
     print('Train size: ', len(train_dataset))
