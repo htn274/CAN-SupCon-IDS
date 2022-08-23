@@ -4,6 +4,7 @@ import math
 import numpy as np
 from tqdm import tqdm
 from datetime import datetime
+import yaml
 
 from dataset import CANDataset
 from utils import get_prediction, cal_metric, print_results
@@ -28,9 +29,16 @@ MODELS = {
     'cnn': BaselineCNNClassifier,
     'resnet18': SupCEResNet
 }
+CONFIG_PATH = './configs/'
+
+def load_config(config_name):
+    with open(os.path.join(CONFIG_PATH, config_name)) as file:
+        config = yaml.safe_load(file)
+    return config
 
 def parse_option():
     parser = argparse.ArgumentParser('argument for training')
+    parser.add_argument('--wavelet_name', type=str, help='mother wavelet')
     parser.add_argument('--data_dir', type=str, help='directory of data for training')
     parser.add_argument('--model', type=str, help='choosing models in [inception, cnn]')
     parser.add_argument('--print_freq', type=int, default=10)
@@ -60,6 +68,12 @@ def parse_option():
     
     opt = parser.parse_args()
     
+    cfg = load_config(f'{opt.wavelet_name}.yaml') 
+    opt.data_dir = os.path.join(cfg['dataset']['path'], opt.wavelet_name)
+    opt.rid = cfg['dataset']['id']
+    opt.model = cfg['model']
+    opt.mean = cfg['dataset']['mean']
+    opt.std = cfg['dataset']['std']
     
     if torch.cuda.is_available():
         torch.cuda.set_device(opt.gpu_device)
@@ -81,7 +95,7 @@ def parse_option():
     opt.model_path = './save/{}/models/'
     opt.tb_path = './save/{}/runs/'
     current_time = datetime.now().strftime("%D_%H%M%S").replace('/', '')
-    opt.model_name = f'wavelet_{opt.model}{opt.rid}_gamma{opt.gamma}_lr{opt.learning_rate}_bs{opt.batch_size}_{opt.epochs}epochs_{current_time}'
+    opt.model_name = f'{opt.wavelet_name}_{opt.model}{opt.rid}_lr{opt.learning_rate}_bs{opt.batch_size}_{opt.epochs}epochs_{current_time}'
     if opt.cosine:
         opt.model_name = '{}_cosine'.format(opt.model_name)
     if opt.warm:
@@ -96,14 +110,13 @@ def parse_option():
         os.makedirs(opt.save_folder, exist_ok=True)
         
     opt.log_file = f'./save/{opt.model_name}/log'
+    print(opt)
     return opt
 
 
 def set_loader(opt):
-    data_dir = f'{opt.data_dir}/{opt.rid}/' 
-    mean= (126.8058,  10.4403,   8.1874,   7.2068,  13.9896,   9.2265,  10.9938, 4.6789, 9.6320)
-    std = (510.3837,  67.7702,  43.0419,  53.2845,  79.1804,  60.3768,  60.1881, 48.7489,  70.4148)
-    transform = transforms.Normalize(mean, std)
+    data_dir = f'{opt.data_dir}/{opt.rid}/'
+    transform = transforms.Normalize(opt.mean, opt.std)
     train_dataset = CANDataset(root_dir=data_dir, transform=transform)
     val_dataset = CANDataset(root_dir=data_dir, is_train=False, transform=transform)
     #train_dataset.total_size = 100000
@@ -111,13 +124,13 @@ def set_loader(opt):
     print('Train size: ', len(train_dataset))
     print('Val size: ', len(val_dataset))
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=opt.batch_size, 
+        train_dataset, batch_size=opt.batch_size,
         shuffle=True, num_workers=opt.num_workers,
         pin_memory=True, sampler=None)
     val_loader = torch.utils.data.DataLoader(
         val_dataset, batch_size=opt.batch_size, shuffle=False,
         num_workers=8, pin_memory=True, sampler=None)
-    
+
     return train_loader, val_loader
 
 def set_model(opt):
