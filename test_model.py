@@ -88,7 +88,7 @@ def evaluate(model, data_loader, verbose=False):
     return results
                   
 def test(args, verbose=False, is_cuda=True):
-    train_loader, val_loader = load_dataset(args, trial_id=args.trial_id)
+    _, val_loader = load_dataset(args, trial_id=args.trial_id)
     model = load_model(args, is_cuda=is_cuda, verbose=verbose)
     results = evaluate(model, val_loader, verbose=verbose)
     return results
