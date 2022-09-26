@@ -113,9 +113,8 @@ class ReductionB(nn.Module):
         return torch.cat(x, 1)
 
 class InceptionResnet(nn.Module):
-    def __init__(self, n_classes):
+    def __init__(self):
         super().__init__()
-        self.n_classes = n_classes
         self.stem = Stem()
         self.inceptionresA = InceptionresenetA()
         self.reductionA = ReductionA()
@@ -123,23 +122,31 @@ class InceptionResnet(nn.Module):
         self.reductionB = ReductionB()
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.dropout = nn.Dropout2d(1 - 0.8)
-        self.linear = nn.Linear(896, n_classes)
+        # self.linear = nn.Linear(896, n_classes)
         
-    def embedding(self, x):
+    def forward(self, x):
         x = self.stem(x)
+        # print('Stem: ', x.shape)
         x = self.inceptionresA(x)
+        # print('Incetion Res A: ', x.shape)
         x = self.reductionA(x)
+        # print('Reduction A: ', x.shape)
         x = self.inceptionresB(x)
+        # print('Inception Res B: ', x.shape)
         x = self.reductionB(x)
+        # print('Reduction B: ', x.shape)
         x = self.avgpool(x)
+        # print('Avg pool: ', x.shape)
         x = self.dropout(x)
+        x = torch.flatten(x, 1)
+        # print('Final: ', x.shape)
         return x
+
+class SupIncepResnet(nn.Module):
+    def __init__(self, num_classes):
+        super(SupIncepResnet, self).__init__()
+        self.encoder = InceptionResnet()
+        self.fc = nn.Linear(896, num_classes)
 
     def forward(self, x):
-        x = self.embedding(x)
-        x = x.view(-1, 896)
-        x = self.linear(x)
-        return x
-
-    def get_embedding(self, x):
-        return self.embedding(x)
+        return self.fc(self.encoder(x))

@@ -14,6 +14,7 @@ torch.manual_seed(0)
 from utils import cal_metric
 
 from dataset import CANDataset
+from networks.inception import SupIncepResnet
 from networks.simple_cnn import SupConCNN
 from networks.classifier import LinearClassifier
 from networks.transfer import TransferModel
@@ -44,6 +45,7 @@ def parse_args():
     parser.add_argument('--lr_tune', type=float, help='learning rate for fine tuning process', default=0.00001)
     parser.add_argument('--transfer_epochs', type=int, default=30)
     parser.add_argument('--tune_epochs', type=int, default=10)
+    parser.add_argument('--feat_dims', type=int, default=128)
     
     args = parser.parse_args()
     
@@ -82,12 +84,15 @@ def change_new_state_dict_parallel(state_dict):
     return new_state_dict
 
 def load_source_model(args, ckpt_epoch, is_cuda=True):
-    if args.pretrained_model == 'resnet':
-        model = SupCEResNet(num_classes=5)
-    else:
-        model = SupConResNet(name='resnet18')
-        
+    model_dict = {
+        'resnet': SupCEResNet(name='resnet18', num_classes=5),
+        'supcon': SupConResNet(name='resnet18'),
+        'incep': SupIncepResnet(num_classes=5)
+    }
+    model = model_dict[args.pretrained_model]
+       
     if args.pretrained_path is not None:
+        print("Loading pretrained model")
         model_file = f'{args.pretrained_path}/ckpt_epoch_{ckpt_epoch}.pth'
         ckpt = torch.load(model_file)
         state_dict = change_new_state_dict_parallel(ckpt['model'])
@@ -227,9 +232,9 @@ def do_helper(args, trial_id):
     source_model = load_source_model(args, ckpt_epoch=args.source_ckpt)
     classifier, criterion, optimizer =\
                                     build_top_classifier(n_classes=args.num_classes, 
-                                                         feat_dim=128,
+                                                         feat_dim=args.feat_dims,
                                                          lr=args.lr_transfer)
-    #print('Shape classifier: ', classifier.fc.weight.shape)
+    print('Shape classifier: ', classifier.fc.weight.shape)
     if args.imprint:
         classifier = imprint(source_model, classifier, train_loader, num_class=4, device='cuda')
         
@@ -238,7 +243,7 @@ def do_helper(args, trial_id):
     finetune = 'tune' in args.tf_algo
     # Train the classifier with a fixed pretrained model first
     if transfer:
-        #print('Training classifier ============')
+        print('Training classifier ============')
         transfer_epochs = args.transfer_epochs
         for epoch in range(1, transfer_epochs + 1):
             loss, acc = train_classifier(train_loader, source_model, classifier, 

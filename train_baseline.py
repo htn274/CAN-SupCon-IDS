@@ -7,7 +7,7 @@ from datetime import datetime
 
 from dataset import CANDataset
 from utils import get_prediction, cal_metric, print_results
-from networks.inception import InceptionResnet
+from networks.inception import SupIncepResnet
 from networks.simple_cnn import BaselineCNNClassifier
 
 from networks.resnet_big import SupCEResNet
@@ -25,7 +25,7 @@ from sklearn.metrics import f1_score
 
 NUM_CLASSES = 5
 MODELS = {
-   'inception': InceptionResnet,
+   'inception': SupIncepResnet,
     'cnn': BaselineCNNClassifier,
     'resnet18': SupCEResNet
 }
@@ -122,8 +122,8 @@ def set_loader(opt):
     return train_loader, val_loader
 
 def set_model(opt):
-    # model = MODELS[opt.model]
-    model = SupCEResNet
+    model = MODELS[opt.model]
+    # model = SupCEResNet
     model = model(num_classes=NUM_CLASSES)
     #class_weights = [0.25, 1.0, 1.0, 1.0, 1.0]
     #criterion = torch.nn.CrossEntropyLoss(weight=torch.FloatTensor(class_weights).cuda())
