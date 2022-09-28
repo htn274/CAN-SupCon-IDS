@@ -234,7 +234,7 @@ def do_helper(args, trial_id):
                                     build_top_classifier(n_classes=args.num_classes, 
                                                          feat_dim=args.feat_dims,
                                                          lr=args.lr_transfer)
-    print('Shape classifier: ', classifier.fc.weight.shape)
+    # print('Shape classifier: ', classifier.fc.weight.shape)
     if args.imprint:
         classifier = imprint(source_model, classifier, train_loader, num_class=4, device='cuda')
         
@@ -243,7 +243,7 @@ def do_helper(args, trial_id):
     finetune = 'tune' in args.tf_algo
     # Train the classifier with a fixed pretrained model first
     if transfer:
-        print('Training classifier ============')
+        # print('Training classifier ============')
         transfer_epochs = args.transfer_epochs
         for epoch in range(1, transfer_epochs + 1):
             loss, acc = train_classifier(train_loader, source_model, classifier, 

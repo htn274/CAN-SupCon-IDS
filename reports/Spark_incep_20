@@ -1,0 +1,26 @@
+Submit :  1
+Loading pretrained model
+Loading pretrained model
+Loading pretrained model
+Loading pretrained model
+Loading pretrained model
+Finish :  2
+Finish :  1
+Finish :  3
+Finish :  4
+Finish :  5
+Submit :  2
+Submit :  3
+Submit :  4
+Submit :  5
+FINAL RESULTS
+Train: 
+fnr ['0.5470', '0.1357', '6.3224', '0.8583']
+rec ['0.9945', '0.9986', '0.9368', '0.9914']
+pre ['0.9919', '0.9998', '0.9482', '0.9959']
+f1 ['0.9932', '0.9992', '0.9422', '0.9937']
+Validation: 
+fnr ['0.5462', '0.1876', '7.3588', '0.8181']
+rec ['0.9945', '0.9981', '0.9264', '0.9918']
+pre ['0.9907', '0.9998', '0.9480', '0.9957']
+f1 ['0.9926', '0.9989', '0.9368', '0.9937']

@@ -13,6 +13,7 @@ from utils import cal_metric, load_dataset, change_new_state_dict
 from networks.classifier import LinearClassifier
 from networks.transfer import TransferModel
 from networks.resnet_big import SupConResNet, SupCEResNet
+from networks.inception import SupIncepResnet
 
 
 def parse_args():
@@ -50,12 +51,15 @@ def load_model(args, verbose=False, is_cuda=True):
     if args.pretrained_model == 'resnet':
         model = SupCEResNet(num_classes=5)
         model = load_models_weights(args, model, verbose)
-    else:
+    elif args.pretrained_model == 'supcon':
         supcon_model = SupConResNet(name='resnet18')
         classifier = LinearClassifier(n_classes=5, feat_dim=128)
         supcon_model = load_models_weights(args, supcon_model, verbose)
         classifier = load_models_weights(args, classifier, verbose)
         model = TransferModel(supcon_model.encoder, classifier)
+    elif args.pretrained_model == 'incep':
+        model = SupIncepResnet(num_classes=5)
+        model = load_models_weights(args, model, verbose)
         
     if is_cuda:
         model = model.cuda()
