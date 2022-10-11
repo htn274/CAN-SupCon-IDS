@@ -16,7 +16,7 @@ from supcon.util import AverageMeter
 from supcon.util import adjust_learning_rate, warmup_learning_rate, accuracy
 from supcon.losses import SupConLoss
 
-from focalloss import FocalLoss
+#from focalloss import FocalLoss
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -72,8 +72,8 @@ def parse_option():
                         help='using cosine') 
     opt = parser.parse_args()
     
-    #if torch.cuda.is_available():
-    #    torch.cuda.set_device(opt.gpu_device)
+    if torch.cuda.is_available():
+        torch.cuda.set_device(opt.gpu_device)
         
     opt.warm = False
     if opt.batch_size > 256:
@@ -157,6 +157,7 @@ def set_model(opt):
         criterion_classifier = criterion_classifier.cuda()
         # Incerease runtime performance
         cudnn.benchmark = True
+    print('Model device: ', next(model.parameters()).device)
     return model, criterion_model, classifier, criterion_classifier
 
 def train_model(train_loader, model, criterion, optimizer, epoch, opt, logger, step):
@@ -173,6 +174,7 @@ def train_model(train_loader, model, criterion, optimizer, epoch, opt, logger, s
         
         warmup_learning_rate(opt, epoch, idx, len(train_loader), optimizer)
         
+        print('Data device: ', images.device)
         features = model(images)
         features = features.unsqueeze(1)
         loss = criterion(features, labels)
